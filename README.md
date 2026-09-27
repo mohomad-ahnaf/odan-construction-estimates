@@ -1,6 +1,6 @@
 # Odan Construction Estimate Management System
 
-An independent construction estimate workspace with secure sign-in, role permissions, estimate editing and approval, audit logs, A4 PDF exports, and formula-enabled Excel workbooks.
+An independent construction estimate workspace with secure sign-in, role permissions, Client and Project management, a financial dashboard, estimate editing and approval, audit logs, A4 PDF exports, and formula-enabled Excel workbooks.
 
 ## Requirements
 
@@ -99,4 +99,4 @@ odan-construction-estimates/
 
 The API and migration wrapper read `DATABASE_URL` only from this project's `backend/.env`. Authentication uses server-side sessions, CSRF checks and role permissions. See the [API reference](docs/api.md), [architecture](docs/architecture.md), [operations](docs/operations.md), and [verification results](docs/verification.md).
 
-The additive Client and Project schema migration and operator-assisted historical estimate reconciliation are documented in [operations](docs/operations.md). Back up the dedicated database before applying the migration or linking historical estimates.
+The dashboard opens at `/`. Create a Client, add a Project under that Client, then create an estimate with Client, Project and Estimate Date. Existing unlinked estimates remain available in the estimate register and can still be exported. The operator-assisted historical reconciliation procedure is documented in [operations](docs/operations.md); it is never run automatically. Back up the dedicated database before linking historical estimates.

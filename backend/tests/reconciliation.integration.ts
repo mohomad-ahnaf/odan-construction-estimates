@@ -111,6 +111,7 @@ describe("operator-assisted reconciliation", () => {
       links: [
         {
           estimateId: otherId,
+          classification: "E2E_TEST",
           clientRef: `id:${otherClientId}`,
           projectRef: `id:${existingProjectId}`,
         },
@@ -145,6 +146,7 @@ describe("operator-assisted reconciliation", () => {
       links: [
         {
           estimateId: sourceId,
+          classification: "SAMPLE",
           clientRef: "new:confirmed",
           projectRef: "new:site",
         },
@@ -155,6 +157,7 @@ describe("operator-assisted reconciliation", () => {
     expect(preview).toEqual([
       expect.objectContaining({
         estimateId: sourceId,
+        classification: "SAMPLE",
         targetClient: newClientName,
         targetProject: newProjectName,
       }),
@@ -205,6 +208,7 @@ describe("operator-assisted reconciliation", () => {
       links: [
         {
           estimateId: otherId,
+          classification: "E2E_TEST",
           clientRef: `id:${existingClientId}`,
           projectRef: `id:${existingProjectId}`,
         },

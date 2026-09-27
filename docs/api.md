@@ -14,6 +14,27 @@ Every POST, PUT and PATCH requires the exact configured `Origin` and an `X-CSRF-
 
 ## Estimates
 
+New estimates require `clientId`, `projectId`, and `estimateDate` (calendar date, `YYYY-MM-DD`). The selected Project must belong to an active Client and be active itself. The API copies Client name/email and Project name/site address into estimate snapshot fields. Draft relationship changes refresh those snapshots. Existing unlinked estimates retain their saved snapshot text and remain readable and exportable.
+
+## Clients, Projects and Dashboard
+
+All routes require authentication. Administrators and estimators can create or edit Clients and Projects; viewers have read access. Client activity is administrator-only. Writes use the existing Origin and CSRF checks.
+
+| Method     | Path                          | Behavior                                                        |
+| ---------- | ----------------------------- | --------------------------------------------------------------- |
+| GET        | `/dashboard`                  | Active counts, approved totals by currency, recent 10 estimates |
+| GET / POST | `/clients`                    | Paginated search / create Client                                |
+| GET / PUT  | `/clients/:id`                | Read / update Client                                            |
+| PATCH      | `/clients/:id/status`         | `{ "active": false }` deactivates; `true` reactivates           |
+| GET        | `/clients/:id/projects`       | Paginated Projects for this Client                              |
+| POST       | `/clients/:clientId/projects` | Create Project under active Client                              |
+| GET        | `/clients/:id/estimates`      | Paginated related Estimates                                     |
+| GET        | `/clients/:id/activity`       | Safe activity summary; administrator only                       |
+| GET / PUT  | `/projects/:id`               | Read / update Project without changing its owner                |
+| PATCH      | `/projects/:id/status`        | `{ "status": "ARCHIVED" }` or `ACTIVE`                          |
+
+Client, Project and activity list queries accept validated `search`, `page`, `pageSize` (1–100), `sort` (`name` or `createdAt`), `direction` (`asc` or `desc`), and optional `active` (`true` or `false`). Identifiers are trimmed and normalized to uppercase; email is trimmed and lowercased. Empty optional identifiers are stored as null and do not conflict. Client list/detail responses include counts and decimal-string estimate totals grouped by currency.
+
 | Method | Path                         | Behavior                                                             |
 | ------ | ---------------------------- | -------------------------------------------------------------------- |
 | GET    | `/estimates?search=&page=1`  | List records, 20 per page; returns `{ data, total, page, pageSize }` |
@@ -29,10 +50,9 @@ Create payload example:
 
 ```json
 {
-  "title": "Residence foundation",
-  "clientName": "Example client",
-  "clientEmail": "client@example.com",
-  "siteAddress": "Example site",
+  "clientId": "11111111-1111-4111-8111-111111111111",
+  "projectId": "22222222-2222-4222-8222-222222222222",
+  "estimateDate": "2026-09-27",
   "currency": "LKR",
   "taxPercent": 0,
   "notes": "Validity: 30 days",

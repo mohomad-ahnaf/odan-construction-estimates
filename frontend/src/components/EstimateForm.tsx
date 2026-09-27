@@ -1,13 +1,17 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import type { EstimateInput } from "../types";
+import type { Client, Project, Page } from "../types";
+import { api } from "../lib/api";
 const schema = z.object({
-  title: z.string().trim().min(1, "Project title is required").max(160),
-  clientName: z.string().trim().min(1, "Client name is required").max(160),
-  clientEmail: z.union([z.string().email(), z.literal("")]),
-  siteAddress: z.string().max(500),
+  clientId: z.string().uuid("Select a client"),
+  projectId: z.string().uuid("Select a project"),
+  estimateDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Enter an estimate date"),
   currency: z.enum(["LKR", "USD", "GBP", "EUR"]),
   taxPercent: z.number().min(0).max(100).multipleOf(0.01),
   notes: z.string().max(4000),
@@ -24,10 +28,9 @@ const schema = z.object({
     .max(100),
 });
 const defaults: EstimateInput = {
-  title: "",
-  clientName: "",
-  clientEmail: "",
-  siteAddress: "",
+  clientId: "",
+  projectId: "",
+  estimateDate: new Date().toISOString().slice(0, 10),
   currency: "LKR",
   taxPercent: 0,
   notes: "",
@@ -41,9 +44,13 @@ export function EstimateForm({
   onSave: (values: EstimateInput) => Promise<void>;
 }) {
   const [error, setError] = useState("");
+  const [clientSearch, setClientSearch] = useState("");
+  const [projectSearch, setProjectSearch] = useState("");
   const {
     register,
     control,
+    watch,
+    setValue,
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<EstimateInput>({
@@ -51,6 +58,24 @@ export function EstimateForm({
     defaultValues: initial ?? defaults,
   });
   const { fields, append, remove } = useFieldArray({ control, name: "items" });
+  const selectedClient = watch("clientId");
+  const selectedProject = watch("projectId");
+  const clients = useQuery({
+    queryKey: ["client-options", clientSearch],
+    queryFn: () =>
+      api<Page<Client>>(
+        `/clients?active=true&pageSize=100&search=${encodeURIComponent(clientSearch)}`,
+      ),
+  });
+  const projects = useQuery({
+    queryKey: ["project-options", selectedClient, projectSearch],
+    queryFn: () =>
+      api<Page<Project>>(
+        `/clients/${selectedClient}/projects?active=true&pageSize=100&search=${encodeURIComponent(projectSearch)}`,
+      ),
+    enabled: !!selectedClient,
+  });
+  const clientField = register("clientId");
   return (
     <form
       className="estimate-form"
@@ -68,25 +93,73 @@ export function EstimateForm({
           01 <span>Project details</span>
         </h2>
         <div className="form-grid">
+          <input
+            aria-label="Find clients"
+            placeholder="Search active clients"
+            value={clientSearch}
+            onChange={(event) => setClientSearch(event.target.value)}
+          />
           <label>
-            Project title
-            <input {...register("title")} />
-            {errors.title && <small role="alert">{errors.title.message}</small>}
+            Client
+            <select
+              {...clientField}
+              value={selectedClient}
+              onChange={(event) => {
+                clientField.onChange(event);
+                setValue("projectId", "");
+                setProjectSearch("");
+              }}
+            >
+              <option value="">Select client</option>
+              {selectedClient &&
+                !clients.data?.data.some(
+                  (client) => client.id === selectedClient,
+                ) && <option value={selectedClient}>Selected client</option>}
+              {clients.data?.data.map((client) => (
+                <option key={client.id} value={client.id}>
+                  {client.name}
+                </option>
+              ))}
+            </select>
+            {errors.clientId && (
+              <small role="alert">{errors.clientId.message}</small>
+            )}
           </label>
+          <input
+            aria-label="Find projects"
+            placeholder="Search active projects"
+            value={projectSearch}
+            onChange={(event) => setProjectSearch(event.target.value)}
+            disabled={!selectedClient}
+          />
           <label>
-            Client name
-            <input {...register("clientName")} />
-            {errors.clientName && (
-              <small role="alert">{errors.clientName.message}</small>
+            Project
+            <select
+              {...register("projectId")}
+              value={selectedProject}
+              disabled={!selectedClient || projects.isPending}
+            >
+              <option value="">Select project</option>
+              {selectedProject &&
+                !projects.data?.data.some(
+                  (project) => project.id === selectedProject,
+                ) && <option value={selectedProject}>Selected project</option>}
+              {projects.data?.data.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.projectName}
+                </option>
+              ))}
+            </select>
+            {errors.projectId && (
+              <small role="alert">{errors.projectId.message}</small>
             )}
           </label>
           <label>
-            Client email
-            <input type="email" {...register("clientEmail")} />
-          </label>
-          <label>
-            Site address
-            <input {...register("siteAddress")} />
+            Estimate Date
+            <input type="date" {...register("estimateDate")} />
+            {errors.estimateDate && (
+              <small role="alert">{errors.estimateDate.message}</small>
+            )}
           </label>
           <label>
             Currency
@@ -203,8 +276,8 @@ export function EstimateForm({
         <div className="error" role="alert">
           Check the project details and line items. Each item needs a
           description, unit, positive quantity (up to 3 decimals), and
-          non-negative rate (up to 2 decimals). Email must be valid; tax must be
-          between 0 and 100.
+          non-negative rate (up to 2 decimals). Client and project are required;
+          tax must be between 0 and 100.
         </div>
       )}
       {error && (

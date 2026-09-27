@@ -4,7 +4,7 @@ This repository is independent. It reads only its own configuration, uses unique
 
 The React application uses React Router for navigation, TanStack Query for server state, and React Hook Form with Zod for form validation. Components, pages, API helpers and types are separate. The API is the authority for all prices, permissions and status transitions.
 
-The Express request path is routes → controllers → services → repositories → Prisma → PostgreSQL. Middleware handles request IDs, structured logs, security headers, rate limits, sessions, CSRF and errors. Repositories commit estimate changes and their audit events in the same transaction.
+The Express request path is routes → controllers → services → repositories → Prisma → PostgreSQL. Middleware handles request IDs, structured logs, security headers, rate limits, sessions, CSRF and errors. Repositories commit estimate, Client and Project changes and their audit events in the same transaction.
 
 ## Domain decisions
 
@@ -14,6 +14,7 @@ The Express request path is routes → controllers → services → repositories
 - Quantities have up to three decimals, rates two decimals. Decimal arithmetic rounds each line half-up to two decimals, sums rounded lines, then rounds tax once. The workbook uses the same formulas and includes cached totals.
 - Currencies are LKR, USD, GBP and EUR; amounts are never aggregated across currencies. Seed prices are illustrative, not market rates.
 - Lists are paginated (20 records). The audit screen shows the latest 100 events. Estimate line items are limited to 100.
+- New estimates select an active Client and one of that Client's active Projects, with an estimate date. Client and Project details are copied into estimate snapshots on creation and on a Draft relationship change. Historical unlinked estimates retain their snapshot text and remain exportable. Dashboard totals are calculated in the API with decimal arithmetic and grouped by currency.
 
 ## Security
 

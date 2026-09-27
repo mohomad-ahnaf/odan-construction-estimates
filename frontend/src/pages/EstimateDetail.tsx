@@ -96,8 +96,12 @@ export function EstimateDetail() {
             <p>{estimate.siteAddress}</p>
           </div>
           <div>
-            <span className="eyebrow">ISSUED</span>
-            <p>{new Date(estimate.createdAt).toLocaleDateString("en-GB")}</p>
+            <span className="eyebrow">ESTIMATE DATE</span>
+            <p>
+              {new Date(
+                estimate.estimateDate ?? estimate.createdAt,
+              ).toLocaleDateString("en-GB")}
+            </p>
             <span className="eyebrow">CURRENCY</span>
             <p>{estimate.currency}</p>
           </div>

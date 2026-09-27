@@ -10,6 +10,16 @@
   --border: #e1e6dd;
   --gold: #b5965a;
 }
+.summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin-bottom:24px}
+.summary-card{padding:22px;display:flex;flex-direction:column;gap:12px}
+.summary-card span{color:var(--muted)}
+.summary-card strong{font-size:26px;color:var(--green)}
+.amount-stack{display:flex;flex-direction:column;gap:4px}
+.currency-amount{display:block;white-space:nowrap}
+.detail-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0}
+.detail-tabs .selected{background:var(--green);color:white}
+@media(max-width:900px){.summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:550px){.summary-grid{grid-template-columns:1fr}.detail-tabs button{flex:1}}
 * {
   box-sizing: border-box;
 }

@@ -19,6 +19,10 @@ export function Layout() {
         </a>
         <div className="nav-label">WORKSPACE</div>
         <nav>
+          <NavLink to="/" end>
+            ◇ &nbsp; Dashboard
+          </NavLink>
+          <NavLink to="/clients">◎ &nbsp; Clients</NavLink>
           <NavLink to="/estimates">▦ &nbsp; Estimates</NavLink>
           {session?.user?.role === "ADMIN" && (
             <NavLink to="/audit">◷ &nbsp; Audit trail</NavLink>

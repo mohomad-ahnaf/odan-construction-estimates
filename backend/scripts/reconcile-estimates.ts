@@ -61,6 +61,7 @@ async function main() {
             newProjects: [],
             links: rows.map((row) => ({
               estimateId: row.id,
+              classification: "REPLACE_WITH_REAL_SAMPLE_OR_E2E_TEST",
               clientRef: "new:REPLACE_CLIENT",
               projectRef: "new:REPLACE_PROJECT",
             })),

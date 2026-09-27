@@ -36,7 +36,7 @@ Keep the resulting archive protected. The `.cache/` directory is ignored by Git;
 
 ### Operator-assisted historical reconciliation
 
-Phase 1 adds nullable `Estimate.clientId`, `Estimate.projectId`, and `Estimate.estimateDate`. It does not infer Clients or Projects from similar names or titles. Existing estimate content and financial snapshots remain unchanged. New-estimate API requirements will be enabled with the Client/Project selection form in Phase 2.
+Phase 1 adds nullable `Estimate.clientId`, `Estimate.projectId`, and `Estimate.estimateDate`. Phase 2 requires all three fields for new estimates and supplies Client and Project selection pages. Historical unlinked estimates remain viewable and exportable. Reconciliation remains an operator-only command; it is never run automatically.
 
 Run these commands from Command Prompt in the repository:
 
@@ -48,7 +48,7 @@ npm run reconcile:preview -w backend
 npm run reconcile:apply -w backend
 ```
 
-The report lists each unlinked estimate's internal ID, number, client name, title, and site address. The plan template is created only if no plan exists. Replace its placeholder references after checking each estimate with an operator who knows the real Client and Project. A `new:KEY` reference creates a record defined in `newClients` or `newProjects`; an `id:UUID` reference selects an existing record. For example, a new Client and Project can be specified as follows, using the actual estimate ID from the ignored report:
+The report lists each unlinked estimate's internal ID, number, client name, title, and site address. The plan template is created only if no plan exists. For every selected link, an operator must explicitly set `classification` to `REAL`, `SAMPLE`, or `E2E_TEST` after reviewing that estimate. The preview displays this classification; it never guesses from names. Replace placeholder references only after confirming the actual Client and Project. Existing Phase 1 plan files also need a classification on each link before preview or apply. A `new:KEY` reference creates a record defined in `newClients` or `newProjects`; an `id:UUID` reference selects an existing record. For example, a new Client and Project can be specified as follows, using the actual estimate ID from the ignored report:
 
 ```json
 {
@@ -70,6 +70,7 @@ The report lists each unlinked estimate's internal ID, number, client name, titl
   "links": [
     {
       "estimateId": "REPLACE_WITH_REPORT_UUID",
+      "classification": "REAL",
       "clientRef": "new:clientA",
       "projectRef": "new:projectA"
     }
@@ -77,7 +78,7 @@ The report lists each unlinked estimate's internal ID, number, client name, titl
 }
 ```
 
-Client emails are normalized to lowercase; registration and VAT numbers and project codes are normalized to uppercase and checked for duplicates. The preview reads and validates the plan without changing the database. Apply prints the same preview, verifies a backup archive in `.cache/backups`, and requires an interactive `APPLY` confirmation. It creates selected records and updates **only** the two estimate relationship columns in one transaction, with audit events. It never fills historical `estimateDate` or rewrites the estimate's snapshot fields. Existing Clients and Projects cannot be hard-deleted while referenced; Clients can be deactivated and Projects archived when management APIs are added in Phase 2. Both `.cache/` and `.data/` remain ignored by Git.
+Client emails are normalized to lowercase; registration and VAT numbers and project codes are normalized to uppercase and checked for duplicates. The preview reads and validates the plan without changing the database. Apply prints the same preview, verifies a backup archive in `.cache/backups`, and requires an interactive `APPLY` confirmation. It creates selected records and updates **only** the two estimate relationship columns in one transaction, with audit events. It never fills historical `estimateDate` or rewrites the estimate's snapshot fields. Existing Clients and Projects cannot be hard-deleted while referenced; Clients can be deactivated and Projects archived. Both `.cache/` and `.data/` remain ignored by Git.
 
 ## Browser and diagnostics
 

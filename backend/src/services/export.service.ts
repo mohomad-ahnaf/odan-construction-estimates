@@ -16,7 +16,7 @@ export const escapeHtml = (value: unknown) =>
 export function renderEstimate(estimate: Estimate) {
   const calculated = totals(estimate.items, estimate.taxPercent);
   const e = escapeHtml;
-  return `<!doctype html><html><head><meta charset="utf-8"><style>@page{size:A4;margin:18mm 16mm 22mm}body{font:11px Arial,sans-serif;color:#18352d}header{border-bottom:3px solid #b99850;padding-bottom:18px}h1{font-size:26px;margin-bottom:6px}.muted{color:#60746c}section{margin:22px 0}table{width:100%;border-collapse:collapse}th{background:#18352d;color:white;text-align:left}td,th{padding:9px 7px;border-bottom:1px solid #dce3df}.num{text-align:right}tr{break-inside:avoid}thead{display:table-header-group}.summary{width:45%;margin:20px 0 20px auto}.notes{white-space:pre-wrap;overflow-wrap:anywhere}td{overflow-wrap:anywhere}footer{font-size:10px;color:#60746c}</style></head><body><header><div>ODAN CONSTRUCTION</div><h1>Construction estimate</h1><div>${e(estimate.number)} · ${e(estimate.status)} · ${e(estimate.currency)}</div></header><section><h2>${e(estimate.title)}</h2><strong>${e(estimate.clientName)}</strong><p>${e(estimate.clientEmail ?? "")}</p><p>${e(estimate.siteAddress)}</p><span class="muted">Issued ${estimate.createdAt.toISOString().slice(0, 10)}</span></section><table><thead><tr><th>Description</th><th>Unit</th><th class="num">Quantity</th><th class="num">Rate</th><th class="num">Amount</th></tr></thead><tbody>${estimate.items.map((item, index) => `<tr><td>${e(item.description)}</td><td>${e(item.unit)}</td><td class="num">${e(item.quantity)}</td><td class="num">${Number(item.rate).toFixed(2)}</td><td class="num">${calculated.lines[index]}</td></tr>`).join("")}</tbody></table><table class="summary"><tr><td>Subtotal</td><td class="num">${calculated.subtotal}</td></tr><tr><td>Tax (${e(estimate.taxPercent)}%)</td><td class="num">${calculated.tax}</td></tr><tr><td><strong>Total ${e(estimate.currency)}</strong></td><td class="num"><strong>${calculated.total}</strong></td></tr></table><section class="notes">${e(estimate.notes)}</section><footer>Odan Construction · Estimate Management System</footer></body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><style>@page{size:A4;margin:18mm 16mm 22mm}body{font:11px Arial,sans-serif;color:#18352d}header{border-bottom:3px solid #b99850;padding-bottom:18px}h1{font-size:26px;margin-bottom:6px}.muted{color:#60746c}section{margin:22px 0}table{width:100%;border-collapse:collapse}th{background:#18352d;color:white;text-align:left}td,th{padding:9px 7px;border-bottom:1px solid #dce3df}.num{text-align:right}tr{break-inside:avoid}thead{display:table-header-group}.summary{width:45%;margin:20px 0 20px auto}.notes{white-space:pre-wrap;overflow-wrap:anywhere}td{overflow-wrap:anywhere}footer{font-size:10px;color:#60746c}</style></head><body><header><div>ODAN CONSTRUCTION</div><h1>Construction estimate</h1><div>${e(estimate.number)} · ${e(estimate.status)} · ${e(estimate.currency)}</div></header><section><h2>${e(estimate.title)}</h2><strong>${e(estimate.clientName)}</strong><p>${e(estimate.clientEmail ?? "")}</p><p>${e(estimate.siteAddress)}</p><span class="muted">Estimate date ${(estimate.estimateDate ?? estimate.createdAt).toISOString().slice(0, 10)}</span></section><table><thead><tr><th>Description</th><th>Unit</th><th class="num">Quantity</th><th class="num">Rate</th><th class="num">Amount</th></tr></thead><tbody>${estimate.items.map((item, index) => `<tr><td>${e(item.description)}</td><td>${e(item.unit)}</td><td class="num">${e(item.quantity)}</td><td class="num">${Number(item.rate).toFixed(2)}</td><td class="num">${calculated.lines[index]}</td></tr>`).join("")}</tbody></table><table class="summary"><tr><td>Subtotal</td><td class="num">${calculated.subtotal}</td></tr><tr><td>Tax (${e(estimate.taxPercent)}%)</td><td class="num">${calculated.tax}</td></tr><tr><td><strong>Total ${e(estimate.currency)}</strong></td><td class="num"><strong>${calculated.total}</strong></td></tr></table><section class="notes">${e(estimate.notes)}</section><footer>Odan Construction · Estimate Management System</footer></body></html>`;
 }
 export async function pdf(estimate: Estimate) {
   const { executablePath } = require("../../../.puppeteerrc.cjs");
@@ -69,7 +69,13 @@ export async function xlsx(estimate: Estimate) {
   ];
   sheet.addRow(["ODAN CONSTRUCTION"]);
   sheet.addRow([estimate.title]);
-  sheet.addRow([estimate.number, estimate.status, estimate.currency]);
+  sheet.addRow([
+    estimate.number,
+    estimate.status,
+    estimate.currency,
+    "Estimate date",
+    (estimate.estimateDate ?? estimate.createdAt).toISOString().slice(0, 10),
+  ]);
   sheet.addRow([estimate.clientName]);
   sheet.addRow([estimate.siteAddress]);
   sheet.addRow([]);

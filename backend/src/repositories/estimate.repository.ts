@@ -3,10 +3,36 @@ import { db } from "../db.js";
 import type { EstimateInput } from "../validation.js";
 import { AppError } from "../middleware/errors.js";
 const include = { items: { orderBy: { position: "asc" as const } } };
+const snapshot = async (tx: Prisma.TransactionClient, input: EstimateInput) => {
+  const [client, project] = await Promise.all([
+    tx.client.findUnique({ where: { id: input.clientId } }),
+    tx.project.findUnique({ where: { id: input.projectId } }),
+  ]);
+  if (
+    !client ||
+    !project ||
+    project.clientId !== client.id ||
+    !client.active ||
+    project.status !== "ACTIVE"
+  )
+    throw new AppError(
+      400,
+      "Select an active project belonging to an active client",
+    );
+  return {
+    title: project.projectName,
+    clientName: client.name,
+    clientEmail: client.email,
+    siteAddress: project.siteAddress ?? "",
+  };
+};
 const dataFor = (input: EstimateInput) => ({
-  ...input,
-  clientEmail: input.clientEmail || null,
-  items: undefined,
+  clientId: input.clientId,
+  projectId: input.projectId,
+  estimateDate: new Date(`${input.estimateDate}T00:00:00.000Z`),
+  currency: input.currency,
+  taxPercent: input.taxPercent,
+  notes: input.notes,
 });
 const itemsFor = (input: EstimateInput) =>
   input.items.map((item, position) => ({ ...item, position }));
@@ -39,8 +65,14 @@ export const estimateRepository = {
   get: (id: string) => db.estimate.findUnique({ where: { id }, include }),
   create: (input: EstimateInput, number: string, actorId: string) =>
     db.$transaction(async (tx) => {
+      const names = await snapshot(tx, input);
       const estimate = await tx.estimate.create({
-        data: { ...dataFor(input), number, items: { create: itemsFor(input) } },
+        data: {
+          ...dataFor(input),
+          ...names,
+          number,
+          items: { create: itemsFor(input) },
+        },
         include,
       });
       await tx.auditLog.create({
@@ -55,9 +87,23 @@ export const estimateRepository = {
     actorId: string,
   ) =>
     db.$transaction(async (tx) => {
+      const current = await tx.estimate.findUnique({ where: { id } });
+      if (!current || current.status !== "DRAFT" || current.version !== version)
+        throw new AppError(
+          409,
+          "Estimate changed or is no longer a draft. Reload before editing.",
+        );
+      const relationshipChanged =
+        current.clientId !== input.clientId ||
+        current.projectId !== input.projectId;
+      const names = relationshipChanged ? await snapshot(tx, input) : {};
       const result = await tx.estimate.updateMany({
         where: { id, version, status: "DRAFT" },
-        data: { ...dataFor(input), version: { increment: 1 } },
+        data: {
+          ...dataFor(input),
+          ...names,
+          version: { increment: 1 },
+        },
       });
       if (result.count !== 1)
         throw new AppError(

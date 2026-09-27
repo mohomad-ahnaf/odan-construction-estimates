@@ -1,10 +1,16 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import {
+  Link,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 import { EstimateForm } from "../components/EstimateForm";
 import { api } from "../lib/api";
 import type { Estimate, EstimateInput } from "../types";
 export function EstimateEditor() {
   const { id } = useParams();
+  const [params] = useSearchParams();
   const navigate = useNavigate();
   const client = useQueryClient();
   const query = useQuery({
@@ -24,10 +30,9 @@ export function EstimateEditor() {
   const existing = query.data;
   const initial: EstimateInput | undefined = existing
     ? {
-        title: existing.title,
-        clientName: existing.clientName,
-        clientEmail: existing.clientEmail ?? "",
-        siteAddress: existing.siteAddress,
+        clientId: existing.clientId ?? "",
+        projectId: existing.projectId ?? "",
+        estimateDate: existing.estimateDate?.slice(0, 10) ?? "",
         currency: existing.currency,
         taxPercent: existing.taxPercent,
         notes: existing.notes,
@@ -38,7 +43,15 @@ export function EstimateEditor() {
           rate,
         })),
       }
-    : undefined;
+    : {
+        clientId: params.get("clientId") ?? "",
+        projectId: params.get("projectId") ?? "",
+        estimateDate: new Date().toISOString().slice(0, 10),
+        currency: "LKR",
+        taxPercent: 0,
+        notes: "",
+        items: [{ description: "", unit: "m²", quantity: 1, rate: 0 }],
+      };
   return (
     <>
       <Link className="back-link" to={id ? `/estimates/${id}` : "/estimates"}>
@@ -64,6 +77,7 @@ export function EstimateEditor() {
             },
           );
           await client.invalidateQueries({ queryKey: ["estimates"] });
+          await client.invalidateQueries({ queryKey: ["dashboard"] });
           client.setQueryData(["estimate", estimate.id], estimate);
           navigate(`/estimates/${estimate.id}`);
         }}

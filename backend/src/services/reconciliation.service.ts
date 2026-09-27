@@ -68,7 +68,12 @@ const newProject = z
     },
   );
 const link = z
-  .object({ estimateId: z.string().uuid(), clientRef: ref, projectRef: ref })
+  .object({
+    estimateId: z.string().uuid(),
+    clientRef: ref,
+    projectRef: ref,
+    classification: z.enum(["REAL", "SAMPLE", "E2E_TEST"]),
+  })
   .strict();
 export const reconciliationPlanSchema = z
   .object({
@@ -109,6 +114,7 @@ export type ReconciliationPlan = z.infer<typeof reconciliationPlanSchema>;
 type Tx = Prisma.TransactionClient;
 type PreviewRow = {
   estimateId: string;
+  classification: "REAL" | "SAMPLE" | "E2E_TEST";
   number: string;
   clientName: string;
   title: string;
@@ -242,6 +248,7 @@ async function validatePlan(
       throw new Error("Project does not belong to the selected client");
     return {
       estimateId: estimate.id,
+      classification: item.classification,
       number: estimate.number,
       clientName: estimate.clientName,
       title: estimate.title,
