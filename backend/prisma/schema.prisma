@@ -1,70 +1,131 @@
 generator client {
   provider = "prisma-client-js"
 }
+
 datasource db {
   provider = "postgresql"
-  url = env("DATABASE_URL")
+  url      = env("DATABASE_URL")
 }
+
 enum Role {
   ADMIN
   ESTIMATOR
   VIEWER
 }
+
 enum EstimateStatus {
   DRAFT
   SENT
   APPROVED
   REJECTED
 }
-model User {
-  id String @id @default(uuid())
-  email String @unique
-  name String
-  passwordHash String
-  role Role @default(VIEWER)
-  sessions Session[]
-  createdAt DateTime @default(now())
+
+enum ProjectStatus {
+  ACTIVE
+  ARCHIVED
 }
+
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  name         String
+  passwordHash String
+  role         Role      @default(VIEWER)
+  sessions     Session[]
+  createdAt    DateTime  @default(now())
+}
+
+model Client {
+  id                 String     @id @default(uuid())
+  name               String
+  registrationNumber String?    @unique
+  vatNumber          String?    @unique
+  address            String?
+  contactPerson      String?
+  telephone          String?
+  email              String?
+  notes              String?
+  active             Boolean    @default(true)
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+  projects           Project[]
+  estimates          Estimate[]
+
+  @@index([name])
+}
+
+model Project {
+  id             String        @id @default(uuid())
+  clientId       String
+  client         Client        @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  projectCode    String?       @unique
+  projectName    String
+  siteAddress    String?
+  description    String?
+  status         ProjectStatus @default(ACTIVE)
+  startDate      DateTime?     @db.Date
+  completionDate DateTime?     @db.Date
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  estimates      Estimate[]
+
+  @@index([clientId, status])
+}
+
 model Session {
-  id String @id
+  id        String   @id
   csrfToken String
-  userId String?
-  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
   expiresAt DateTime
+
   @@index([expiresAt])
 }
+
 model Estimate {
-  id String @id @default(uuid())
-  number String @unique
-  title String
-  clientName String
-  clientEmail String?
-  siteAddress String
-  currency String @default("LKR")
-  taxPercent Decimal @db.Decimal(5, 2)
-  notes String
-  status EstimateStatus @default(DRAFT)
-  version Int @default(1)
-  items EstimateItem[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String         @id @default(uuid())
+  number       String         @unique
+  title        String
+  clientName   String
+  clientEmail  String?
+  clientId     String?
+  client       Client?        @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  projectId    String?
+  project      Project?       @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  estimateDate DateTime?      @db.Date
+  siteAddress  String
+  currency     String         @default("LKR")
+  taxPercent   Decimal        @db.Decimal(5, 2)
+  notes        String
+  status       EstimateStatus @default(DRAFT)
+  version      Int            @default(1)
+  items        EstimateItem[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([clientId, createdAt])
+  @@index([projectId])
 }
+
 model EstimateItem {
-  id String @id @default(uuid())
-  estimateId String
-  estimate Estimate @relation(fields: [estimateId], references: [id], onDelete: Cascade)
-  position Int
+  id          String   @id @default(uuid())
+  estimateId  String
+  estimate    Estimate @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  position    Int
   description String
-  unit String
-  quantity Decimal @db.Decimal(14, 3)
-  rate Decimal @db.Decimal(14, 2)
+  unit        String
+  quantity    Decimal  @db.Decimal(14, 3)
+  rate        Decimal  @db.Decimal(14, 2)
+
   @@unique([estimateId, position])
 }
+
 model AuditLog {
-  id String @id @default(uuid())
-  actorId String?
-  action String
-  entityId String?
+  id        String   @id @default(uuid())
+  actorId   String?
+  action    String
+  entityId  String?
   createdAt DateTime @default(now())
+
   @@index([createdAt])
 }

@@ -98,3 +98,5 @@ odan-construction-estimates/
 ```
 
 The API and migration wrapper read `DATABASE_URL` only from this project's `backend/.env`. Authentication uses server-side sessions, CSRF checks and role permissions. See the [API reference](docs/api.md), [architecture](docs/architecture.md), [operations](docs/operations.md), and [verification results](docs/verification.md).
+
+The additive Client and Project schema migration and operator-assisted historical estimate reconciliation are documented in [operations](docs/operations.md). Back up the dedicated database before applying the migration or linking historical estimates.

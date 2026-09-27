@@ -22,6 +22,63 @@ Additional accounts can be provisioned by an operator with `npm run user:create 
 
 Back up `odan_estimation` with the installed PostgreSQL 18 tools and periodically test restoration. Keep backups protected and outside Git. A previous project database snapshot, if present, is retained only in this repository's ignored `.cache` directory for migration safety; it is not used by the application.
 
+### Client and Project migration backup
+
+Before applying the Client and Project migration or reconciling existing estimates, make a fresh custom-format backup from **Command Prompt** in this repository. Replace only the username placeholder; PostgreSQL prompts for the password, which must not be placed in the command or a script.
+
+```cmd
+if not exist .cache\backups mkdir .cache\backups
+"C:\Program Files\PostgreSQL\18\bin\pg_dump.exe" -h localhost -p 5432 -U YOUR_DATABASE_USERNAME -W -F c -f ".cache\backups\odan_estimation-manual.dump" odan_estimation
+"C:\Program Files\PostgreSQL\18\bin\pg_restore.exe" --list ".cache\backups\odan_estimation-manual.dump" >NUL
+```
+
+Keep the resulting archive protected. The `.cache/` directory is ignored by Git; it is not a substitute for a separate, tested backup copy. Apply the versioned migration with `npm run db:generate` and `npm run db:migrate` only after the backup succeeds.
+
+### Operator-assisted historical reconciliation
+
+Phase 1 adds nullable `Estimate.clientId`, `Estimate.projectId`, and `Estimate.estimateDate`. It does not infer Clients or Projects from similar names or titles. Existing estimate content and financial snapshots remain unchanged. New-estimate API requirements will be enabled with the Client/Project selection form in Phase 2.
+
+Run these commands from Command Prompt in the repository:
+
+```cmd
+npm run reconcile:report -w backend
+notepad .cache\reconciliation\report.json
+notepad .cache\reconciliation\plan.json
+npm run reconcile:preview -w backend
+npm run reconcile:apply -w backend
+```
+
+The report lists each unlinked estimate's internal ID, number, client name, title, and site address. The plan template is created only if no plan exists. Replace its placeholder references after checking each estimate with an operator who knows the real Client and Project. A `new:KEY` reference creates a record defined in `newClients` or `newProjects`; an `id:UUID` reference selects an existing record. For example, a new Client and Project can be specified as follows, using the actual estimate ID from the ignored report:
+
+```json
+{
+  "newClients": [
+    {
+      "key": "clientA",
+      "name": "Confirmed client",
+      "email": "contact@example.com"
+    }
+  ],
+  "newProjects": [
+    {
+      "key": "projectA",
+      "clientRef": "new:clientA",
+      "projectName": "Confirmed project",
+      "status": "ACTIVE"
+    }
+  ],
+  "links": [
+    {
+      "estimateId": "REPLACE_WITH_REPORT_UUID",
+      "clientRef": "new:clientA",
+      "projectRef": "new:projectA"
+    }
+  ]
+}
+```
+
+Client emails are normalized to lowercase; registration and VAT numbers and project codes are normalized to uppercase and checked for duplicates. The preview reads and validates the plan without changing the database. Apply prints the same preview, verifies a backup archive in `.cache/backups`, and requires an interactive `APPLY` confirmation. It creates selected records and updates **only** the two estimate relationship columns in one transaction, with audit events. It never fills historical `estimateDate` or rewrites the estimate's snapshot fields. Existing Clients and Projects cannot be hard-deleted while referenced; Clients can be deactivated and Projects archived when management APIs are added in Phase 2. Both `.cache/` and `.data/` remain ignored by Git.
+
 ## Browser and diagnostics
 
 Run `npm run browser:use -- "C:\Program Files\Google\Chrome\Application\chrome.exe"` from Command Prompt to select an installed Chrome binary. A machine-specific selection is saved to ignored `.cache/browser.json`. Alternatively, run `npm run browser:install` to download Chromium into this project's cache. Puppeteer and Playwright use that selection for PDF and browser tests.
