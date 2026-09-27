@@ -23,6 +23,9 @@ const snapshot = async (tx: Prisma.TransactionClient, input: EstimateInput) => {
     title: project.projectName,
     clientName: client.name,
     clientEmail: client.email,
+    clientRegistrationNumberSnapshot: client.registrationNumber,
+    clientVatNumberSnapshot: client.vatNumber,
+    projectCodeSnapshot: project.projectCode,
     siteAddress: project.siteAddress ?? "",
   };
 };
@@ -37,6 +40,30 @@ const dataFor = (input: EstimateInput) => ({
 const itemsFor = (input: EstimateInput) =>
   input.items.map((item, position) => ({ ...item, position }));
 export const estimateRepository = {
+  project: (id: string) =>
+    db.project.findUnique({
+      where: { id },
+      select: { id: true, clientId: true },
+    }),
+  listForProject: (projectId: string, search: string, page: number) => {
+    const where: Prisma.EstimateWhereInput = {
+      projectId,
+      OR: [
+        { number: { contains: search, mode: "insensitive" } },
+        { title: { contains: search, mode: "insensitive" } },
+      ],
+    };
+    return db.$transaction([
+      db.estimate.findMany({
+        where,
+        include,
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        skip: (page - 1) * 20,
+        take: 20,
+      }),
+      db.estimate.count({ where }),
+    ]);
+  },
   list: (search: string, page: number) =>
     db.$transaction([
       db.estimate.findMany({

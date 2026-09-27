@@ -88,10 +88,13 @@ model Estimate {
   title        String
   clientName   String
   clientEmail  String?
+  clientRegistrationNumberSnapshot String?
+  clientVatNumberSnapshot String?
   clientId     String?
   client       Client?        @relation(fields: [clientId], references: [id], onDelete: Restrict)
   projectId    String?
   project      Project?       @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  projectCodeSnapshot String?
   estimateDate DateTime?      @db.Date
   siteAddress  String
   currency     String         @default("LKR")

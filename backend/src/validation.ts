@@ -44,6 +44,11 @@ export const estimateSchema = z
   })
   .strict();
 export type EstimateInput = z.infer<typeof estimateSchema>;
+export const projectEstimateSchema = estimateSchema.omit({
+  clientId: true,
+  projectId: true,
+});
+export type ProjectEstimateInput = z.infer<typeof projectEstimateSchema>;
 export const updateSchema = estimateSchema.extend({
   version: z.number().int().positive(),
 });

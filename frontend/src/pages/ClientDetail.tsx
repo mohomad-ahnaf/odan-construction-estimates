@@ -2,13 +2,18 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api, money } from "../lib/api";
 import { useAuth } from "../auth";
-import type { Client, Project, Estimate, Page } from "../types";
-import { StatusBadge } from "../components/StatusBadge";
+import type { Client, Project, Page } from "../types";
+
 export function ClientDetail() {
   const { id } = useParams();
   const [params, setParams] = useSearchParams();
-  const tab = params.get("tab") ?? "overview";
+  const requestedTab = params.get("tab");
   const { session } = useAuth();
+  const tab =
+    requestedTab === "projects" ||
+    (requestedTab === "activity" && session?.user?.role === "ADMIN")
+      ? requestedTab
+      : "overview";
   const cache = useQueryClient();
   const client = useQuery({
     queryKey: ["client", id],
@@ -18,14 +23,6 @@ export function ClientDetail() {
     queryKey: ["client-projects", id],
     queryFn: () => api<Page<Project>>(`/clients/${id}/projects?pageSize=100`),
     enabled: tab === "projects",
-  });
-  const estimates = useQuery({
-    queryKey: ["client-estimates", id],
-    queryFn: () =>
-      api<Page<Estimate>>(
-        `/clients/${id}/estimates?pageSize=100&sort=createdAt&direction=desc`,
-      ),
-    enabled: tab === "estimates",
   });
   const activity = useQuery({
     queryKey: ["client-activity", id],
@@ -47,9 +44,11 @@ export function ClientDetail() {
   const canWrite = session?.user?.role !== "VIEWER";
   return (
     <>
-      <Link className="back-link" to="/clients">
-        ← Clients
-      </Link>
+      <nav className="breadcrumbs" aria-label="Breadcrumb">
+        <Link to="/clients">Clients</Link>
+        <span>›</span>
+        <span aria-current="page">{c.name}</span>
+      </nav>
       <div className="page-heading">
         <div>
           <span className="eyebrow">CLIENT WORKSPACE</span>
@@ -63,17 +62,12 @@ export function ClientDetail() {
                 Edit Client
               </Link>
               {c.active && (
-                <>
-                  <Link className="button" to={`/clients/${id}/projects/new`}>
-                    Add Project
-                  </Link>
-                  <Link
-                    className="button primary"
-                    to={`/estimates/new?clientId=${id}`}
-                  >
-                    Create Estimate for This Client
-                  </Link>
-                </>
+                <Link
+                  className="button primary"
+                  to={`/clients/${id}/projects/new`}
+                >
+                  Add Project
+                </Link>
               )}
               <button
                 onClick={async () => {
@@ -96,7 +90,6 @@ export function ClientDetail() {
         {[
           "overview",
           "projects",
-          "estimates",
           ...(session?.user?.role === "ADMIN" ? ["activity"] : []),
         ].map((name) => (
           <button
@@ -118,12 +111,12 @@ export function ClientDetail() {
               {c.projectCount}
             </p>
             <p>
-              <strong>Estimates</strong>
+              <strong>Estimates across projects</strong>
               <br />
               {c.estimateCount}
             </p>
             <p>
-              <strong>Estimate totals</strong>
+              <strong>Estimate totals across projects</strong>
               <br />
               {Object.entries(c.totalsByCurrency).length
                 ? Object.entries(c.totalsByCurrency).map(
@@ -208,56 +201,6 @@ export function ClientDetail() {
                       <td>{p.status}</td>
                       <td>
                         <Link to={`/projects/${p.id}`}>View</Link>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-      )}
-      {tab === "estimates" && (
-        <section className="panel form-section">
-          <h2>Estimates</h2>
-          {estimates.isPending ? (
-            <p>Loading estimates…</p>
-          ) : estimates.isError ? (
-            <p role="alert">
-              {estimates.error.message}{" "}
-              <button onClick={() => void estimates.refetch()}>Retry</button>
-            </p>
-          ) : estimates.data.data.length === 0 ? (
-            <p>No estimates for this client.</p>
-          ) : (
-            <div className="table-scroll">
-              <table>
-                <thead>
-                  <tr>
-                    <th>NUMBER</th>
-                    <th>PROJECT</th>
-                    <th>DATE</th>
-                    <th>STATUS</th>
-                    <th>TOTAL</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {estimates.data.data.map((e) => (
-                    <tr key={e.id}>
-                      <td>{e.number}</td>
-                      <td>{e.title}</td>
-                      <td>
-                        {e.estimateDate
-                          ? new Date(e.estimateDate).toLocaleDateString("en-GB")
-                          : "—"}
-                      </td>
-                      <td>
-                        <StatusBadge status={e.status} />
-                      </td>
-                      <td>{money(e.totals.total, e.currency)}</td>
-                      <td>
-                        <Link to={`/estimates/${e.id}`}>View / export</Link>
                       </td>
                     </tr>
                   ))}

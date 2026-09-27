@@ -14,7 +14,7 @@ Every POST, PUT and PATCH requires the exact configured `Origin` and an `X-CSRF-
 
 ## Estimates
 
-New estimates require `clientId`, `projectId`, and `estimateDate` (calendar date, `YYYY-MM-DD`). The selected Project must belong to an active Client and be active itself. The API copies Client name/email and Project name/site address into estimate snapshot fields. Draft relationship changes refresh those snapshots. Existing unlinked estimates retain their saved snapshot text and remain readable and exportable.
+Normal creation starts at `POST /projects/:projectId/estimates`, with `estimateDate` (calendar date, `YYYY-MM-DD`) and estimate fields in the body. The scoped endpoint derives the Client from the Project and rejects relationship IDs in the body. It verifies that the Project and Client are active. The API copies Client and Project names, contact/address details, registration/VAT identifiers and Project code into estimate snapshot fields. Draft relationship changes through the compatibility update endpoint validate the new relationship and refresh snapshots. Existing unlinked estimates retain their saved snapshot text and remain readable and exportable through global endpoints.
 
 ## Clients, Projects and Dashboard
 
@@ -32,6 +32,7 @@ All routes require authentication. Administrators and estimators can create or e
 | GET        | `/clients/:id/activity`       | Safe activity summary; administrator only                       |
 | GET / PUT  | `/projects/:id`               | Read / update Project without changing its owner                |
 | PATCH      | `/projects/:id/status`        | `{ "status": "ARCHIVED" }` or `ACTIVE`                          |
+| GET / POST | `/projects/:projectId/estimates` | List Project estimates / create under that Project             |
 
 Client, Project and activity list queries accept validated `search`, `page`, `pageSize` (1–100), `sort` (`name` or `createdAt`), `direction` (`asc` or `desc`), and optional `active` (`true` or `false`). Identifiers are trimmed and normalized to uppercase; email is trimmed and lowercased. Empty optional identifiers are stored as null and do not conflict. Client list/detail responses include counts and decimal-string estimate totals grouped by currency.
 
@@ -46,12 +47,10 @@ Client, Project and activity list queries accept validated `search`, `page`, `pa
 | GET    | `/estimates/:id/export/xlsx` | Download a formula-enabled Excel workbook                            |
 | GET    | `/audit`                     | Return the latest 100 audit events; administrator only               |
 
-Create payload example:
+Project-scoped create payload example for `POST /projects/:projectId/estimates`:
 
 ```json
 {
-  "clientId": "11111111-1111-4111-8111-111111111111",
-  "projectId": "22222222-2222-4222-8222-222222222222",
   "estimateDate": "2026-09-27",
   "currency": "LKR",
   "taxPercent": 0,
@@ -62,7 +61,7 @@ Create payload example:
 }
 ```
 
-An update uses the same fields plus `version`. Server-owned fields such as `id`, `number`, `status`, `totals`, item IDs and timestamps are not accepted in content writes. The server always calculates totals. Returned monetary totals are decimal strings; input quantities and rates are bounded numbers.
+The legacy global `POST /estimates` remains for compatibility, but requires valid `clientId` and `projectId` in addition to these fields. A draft update through `PUT /estimates/:id` uses the global fields plus `version`; moving it to a different Project requires the matching Client ID and refreshes relationship snapshots. Server-owned fields such as `id`, `number`, `status`, `totals`, item IDs and timestamps are not accepted in content writes. The server always calculates totals. Returned monetary totals are decimal strings; input quantities and rates are bounded numbers.
 
 Status transitions: DRAFT → SENT, SENT → DRAFT / APPROVED / REJECTED, REJECTED → DRAFT. Approval/rejection requires an administrator. Approved estimates are immutable. Marking an estimate SENT does not send email.
 

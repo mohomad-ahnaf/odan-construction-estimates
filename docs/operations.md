@@ -36,7 +36,7 @@ Keep the resulting archive protected. The `.cache/` directory is ignored by Git;
 
 ### Operator-assisted historical reconciliation
 
-Phase 1 adds nullable `Estimate.clientId`, `Estimate.projectId`, and `Estimate.estimateDate`. Phase 2 requires all three fields for new estimates and supplies Client and Project selection pages. Historical unlinked estimates remain viewable and exportable. Reconciliation remains an operator-only command; it is never run automatically.
+Phase 1 adds nullable `Estimate.clientId`, `Estimate.projectId`, and `Estimate.estimateDate`. Phase 2 requires all three fields for new estimates; creation starts from a Project and the API derives its Client. A later additive migration adds nullable Client registration/VAT and Project code snapshot columns. It does not update historical records. Historical unlinked estimates remain viewable and exportable through the global Estimates register. Reconciliation remains an operator-only command; it is never run automatically.
 
 Run these commands from Command Prompt in the repository:
 

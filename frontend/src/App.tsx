@@ -38,7 +38,10 @@ export function App() {
         <Route path="/estimates" element={<Estimates />} />
         {session.user.role !== "VIEWER" && (
           <>
-            <Route path="/estimates/new" element={<EstimateEditor />} />
+            <Route
+              path="/projects/:projectId/estimates/new"
+              element={<EstimateEditor />}
+            />
             <Route path="/estimates/:id/edit" element={<EstimateEditor />} />
             <Route path="/clients/new" element={<ClientEditor />} />
             <Route path="/clients/:id/edit" element={<ClientEditor />} />

@@ -8,6 +8,9 @@ const estimate = {
   title: "<script>alert(1)</script>",
   clientName: '=HYPERLINK("evil")',
   clientEmail: null,
+  clientRegistrationNumberSnapshot: "REG-123",
+  clientVatNumberSnapshot: "VAT-456",
+  projectCodeSnapshot: "PRJ-789",
   siteAddress: "Address",
   currency: "LKR",
   taxPercent: new Prisma.Decimal(18),
@@ -32,6 +35,7 @@ it("escapes untrusted PDF text", () => {
   expect(escapeHtml("<>&\"'")).toBe("&lt;&gt;&amp;&quot;&#39;");
   expect(renderEstimate(estimate)).not.toContain("<script>");
   expect(renderEstimate(estimate)).not.toContain("<img");
+  expect(renderEstimate(estimate)).toContain("Project code: PRJ-789");
 });
 it("creates formula-enabled Excel with untrusted client text as a string", async () => {
   const data = await xlsx(estimate);
@@ -47,4 +51,6 @@ it("creates formula-enabled Excel with untrusted client text as a string", async
     result: 236,
   });
   expect(sheet.getCell("A4").type).toBe(ExcelJS.ValueType.String);
+  expect(sheet.getCell("B4").value).toBe("REG-123");
+  expect(sheet.getCell("B5").value).toBe("PRJ-789");
 });

@@ -1,14 +1,9 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import type { EstimateInput } from "../types";
-import type { Client, Project, Page } from "../types";
-import { api } from "../lib/api";
+import type { Client, EstimateFields, Project } from "../types";
 const schema = z.object({
-  clientId: z.string().uuid("Select a client"),
-  projectId: z.string().uuid("Select a project"),
   estimateDate: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, "Enter an estimate date"),
@@ -27,9 +22,7 @@ const schema = z.object({
     .min(1)
     .max(100),
 });
-const defaults: EstimateInput = {
-  clientId: "",
-  projectId: "",
+const defaults: EstimateFields = {
   estimateDate: new Date().toISOString().slice(0, 10),
   currency: "LKR",
   taxPercent: 0,
@@ -38,44 +31,24 @@ const defaults: EstimateInput = {
 };
 export function EstimateForm({
   initial,
+  context,
   onSave,
 }: {
-  initial?: EstimateInput;
-  onSave: (values: EstimateInput) => Promise<void>;
+  initial?: EstimateFields;
+  context: { client: Client; project: Project };
+  onSave: (values: EstimateFields) => Promise<void>;
 }) {
   const [error, setError] = useState("");
-  const [clientSearch, setClientSearch] = useState("");
-  const [projectSearch, setProjectSearch] = useState("");
   const {
     register,
     control,
-    watch,
-    setValue,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<EstimateInput>({
+  } = useForm<EstimateFields>({
     resolver: zodResolver(schema),
     defaultValues: initial ?? defaults,
   });
   const { fields, append, remove } = useFieldArray({ control, name: "items" });
-  const selectedClient = watch("clientId");
-  const selectedProject = watch("projectId");
-  const clients = useQuery({
-    queryKey: ["client-options", clientSearch],
-    queryFn: () =>
-      api<Page<Client>>(
-        `/clients?active=true&pageSize=100&search=${encodeURIComponent(clientSearch)}`,
-      ),
-  });
-  const projects = useQuery({
-    queryKey: ["project-options", selectedClient, projectSearch],
-    queryFn: () =>
-      api<Page<Project>>(
-        `/clients/${selectedClient}/projects?active=true&pageSize=100&search=${encodeURIComponent(projectSearch)}`,
-      ),
-    enabled: !!selectedClient,
-  });
-  const clientField = register("clientId");
   return (
     <form
       className="estimate-form"
@@ -93,67 +66,22 @@ export function EstimateForm({
           01 <span>Project details</span>
         </h2>
         <div className="form-grid">
-          <input
-            aria-label="Find clients"
-            placeholder="Search active clients"
-            value={clientSearch}
-            onChange={(event) => setClientSearch(event.target.value)}
-          />
-          <label>
-            Client
-            <select
-              {...clientField}
-              value={selectedClient}
-              onChange={(event) => {
-                clientField.onChange(event);
-                setValue("projectId", "");
-                setProjectSearch("");
-              }}
-            >
-              <option value="">Select client</option>
-              {selectedClient &&
-                !clients.data?.data.some(
-                  (client) => client.id === selectedClient,
-                ) && <option value={selectedClient}>Selected client</option>}
-              {clients.data?.data.map((client) => (
-                <option key={client.id} value={client.id}>
-                  {client.name}
-                </option>
-              ))}
-            </select>
-            {errors.clientId && (
-              <small role="alert">{errors.clientId.message}</small>
-            )}
-          </label>
-          <input
-            aria-label="Find projects"
-            placeholder="Search active projects"
-            value={projectSearch}
-            onChange={(event) => setProjectSearch(event.target.value)}
-            disabled={!selectedClient}
-          />
-          <label>
-            Project
-            <select
-              {...register("projectId")}
-              value={selectedProject}
-              disabled={!selectedClient || projects.isPending}
-            >
-              <option value="">Select project</option>
-              {selectedProject &&
-                !projects.data?.data.some(
-                  (project) => project.id === selectedProject,
-                ) && <option value={selectedProject}>Selected project</option>}
-              {projects.data?.data.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.projectName}
-                </option>
-              ))}
-            </select>
-            {errors.projectId && (
-              <small role="alert">{errors.projectId.message}</small>
-            )}
-          </label>
+          <p>
+            <strong>Client</strong>
+            <br />
+            {context.client.name}
+            {context.client.registrationNumber
+              ? ` · ${context.client.registrationNumber}`
+              : ""}
+          </p>
+          <p>
+            <strong>Project</strong>
+            <br />
+            {context.project.projectName}
+            {context.project.projectCode
+              ? ` · ${context.project.projectCode}`
+              : ""}
+          </p>
           <label>
             Estimate Date
             <input type="date" {...register("estimateDate")} />
@@ -276,8 +204,8 @@ export function EstimateForm({
         <div className="error" role="alert">
           Check the project details and line items. Each item needs a
           description, unit, positive quantity (up to 3 decimals), and
-          non-negative rate (up to 2 decimals). Client and project are required;
-          tax must be between 0 and 100.
+          non-negative rate (up to 2 decimals). Estimate date is required; tax
+          must be between 0 and 100.
         </div>
       )}
       {error && (

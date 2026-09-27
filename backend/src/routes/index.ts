@@ -50,6 +50,12 @@ routes.post(
 routes.get("/clients/:id/estimates", clients.estimates);
 routes.get("/clients/:id/activity", allow("ADMIN"), clients.activity);
 routes.get("/projects/:id", clients.getProject);
+routes.get("/projects/:projectId/estimates", estimates.listForProject);
+routes.post(
+  "/projects/:projectId/estimates",
+  allow("ADMIN", "ESTIMATOR"),
+  estimates.createForProject,
+);
 routes.put("/projects/:id", allow("ADMIN", "ESTIMATOR"), clients.updateProject);
 routes.patch(
   "/projects/:id/status",

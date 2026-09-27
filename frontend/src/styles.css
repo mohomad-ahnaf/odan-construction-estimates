@@ -18,6 +18,9 @@
 .currency-amount{display:block;white-space:nowrap}
 .detail-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0}
 .detail-tabs .selected{background:var(--green);color:white}
+.breadcrumbs{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:20px;color:var(--muted);font-size:13px}
+.breadcrumbs a{color:var(--green);text-decoration:underline;text-underline-offset:3px}
+.breadcrumbs [aria-current="page"]{color:#253a32;font-weight:600}
 @media(max-width:900px){.summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:550px){.summary-grid{grid-template-columns:1fr}.detail-tabs button{flex:1}}
 * {

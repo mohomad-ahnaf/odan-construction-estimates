@@ -19,6 +19,7 @@ export type EstimateInput = {
   notes: string;
   items: Item[];
 };
+export type EstimateFields = Omit<EstimateInput, "clientId" | "projectId">;
 export type Estimate = Omit<
   EstimateInput,
   "clientId" | "projectId" | "estimateDate"
@@ -29,6 +30,9 @@ export type Estimate = Omit<
   title: string;
   clientName: string;
   clientEmail: string | null;
+  clientRegistrationNumberSnapshot: string | null;
+  clientVatNumberSnapshot: string | null;
+  projectCodeSnapshot: string | null;
   siteAddress: string;
   id: string;
   number: string;

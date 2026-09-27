@@ -33,6 +33,12 @@ test("responsive Client to Project to Estimate, Save, View, PDF and Excel", asyn
   await page.waitForURL(/\/clients\/[0-9a-f-]+$/);
   ids.client = page.url().match(/\/clients\/([0-9a-f-]+)/)?.[1];
   await expect(page.getByRole("heading", { name: /E2E client/ })).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Create Estimate for This Client" }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Estimates", exact: true }),
+  ).toHaveCount(0);
   await page.getByRole("link", { name: "Add Project" }).click();
   await page.getByLabel("Project name").fill("E2E residence");
   await page.getByLabel("Site address").fill("Test site");
@@ -43,8 +49,13 @@ test("responsive Client to Project to Estimate, Save, View, PDF and Excel", asyn
     page.getByRole("heading", { name: "E2E residence" }),
   ).toBeVisible();
   await page.getByRole("link", { name: "Create Estimate" }).click();
-  await expect(page.locator('select[name="clientId"]')).toHaveValue(ids.client!);
-  await expect(page.locator('select[name="projectId"]')).toHaveValue(ids.project!);
+  await expect(page).toHaveURL(
+    new RegExp(`/projects/${ids.project}/estimates/new$`),
+  );
+  await expect(page.getByText(/E2E residence/).first()).toBeVisible();
+  await expect(
+    page.locator('select[name="clientId"], select[name="projectId"]'),
+  ).toHaveCount(0);
   await page.getByLabel("Description 1").fill("Foundation concrete");
   await page.getByLabel("Quantity 1").fill("2.5");
   await page.getByLabel("Rate 1").fill("1000");
@@ -52,6 +63,9 @@ test("responsive Client to Project to Estimate, Save, View, PDF and Excel", asyn
   await page.getByRole("button", { name: /Save estimate/ }).click();
   await page.waitForURL(/\/estimates\/[0-9a-f-]+$/);
   ids.estimate = page.url().match(/\/estimates\/([0-9a-f-]+)/)?.[1];
+  await expect(
+    page.getByRole("navigation", { name: "Breadcrumb" }),
+  ).toContainText("E2E residence");
   await expect(page.locator(".grand-total")).toContainText("2,950.00");
   for (const [label, extension, magic] of [
     ["Excel", ".xlsx", "PK"],

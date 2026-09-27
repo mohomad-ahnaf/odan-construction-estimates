@@ -69,7 +69,7 @@ beforeAll(async () => {
     .set("x-csrf-token", tokens.admin)
     .send({
       name: "Integration client",
-      registrationNumber: "",
+      registrationNumber: `INT-${randomUUID()}`,
       vatNumber: "",
       address: "",
       contactPerson: "",
@@ -85,7 +85,7 @@ beforeAll(async () => {
     .set("Origin", config.ODAN_ORIGIN)
     .set("x-csrf-token", tokens.admin)
     .send({
-      projectCode: "",
+      projectCode: `PRJ-${randomUUID()}`,
       projectName: "Integration residence",
       siteAddress: "Test site",
       description: "",
@@ -181,6 +181,18 @@ describe("real PostgreSQL HTTP workflow", () => {
     await write(
       admin,
       tokens.admin,
+      `/api/projects/${project.body.id}/estimates`,
+      {
+        estimateDate: input.estimateDate,
+        currency: input.currency,
+        taxPercent: input.taxPercent,
+        notes: input.notes,
+        items: input.items,
+      },
+    ).expect(400);
+    await write(
+      admin,
+      tokens.admin,
       `/api/clients/${response.body.id}/projects`,
       projectBody("Blocked project"),
     ).expect(409);
@@ -228,6 +240,18 @@ describe("real PostgreSQL HTTP workflow", () => {
       clientId: other.body.id,
       projectId: project.body.id,
     }).expect(400);
+    await write(
+      admin,
+      tokens.admin,
+      `/api/projects/${project.body.id}/estimates`,
+      {
+        estimateDate: input.estimateDate,
+        currency: input.currency,
+        taxPercent: input.taxPercent,
+        notes: input.notes,
+        items: input.items,
+      },
+    ).expect(400);
   });
   it("requires all estimate relationships and a valid date", async () => {
     await write(admin, tokens.admin, "/api/estimates", {
@@ -242,6 +266,53 @@ describe("real PostgreSQL HTTP workflow", () => {
       ...input,
       estimateDate: undefined,
     }).expect(400);
+  });
+  it("creates and lists estimates under one Project with immutable code snapshots", async () => {
+    const payload = {
+      estimateDate: input.estimateDate,
+      currency: input.currency,
+      taxPercent: input.taxPercent,
+      notes: input.notes,
+      items: input.items,
+    };
+    await write(
+      viewer,
+      tokens.viewer,
+      `/api/projects/${input.projectId}/estimates`,
+      payload,
+    ).expect(403);
+    await write(
+      admin,
+      tokens.admin,
+      `/api/projects/${input.projectId}/estimates`,
+      { ...payload, clientId: input.clientId },
+    ).expect(400);
+    const created = await write(
+      admin,
+      tokens.admin,
+      `/api/projects/${input.projectId}/estimates`,
+      payload,
+    ).expect(201);
+    expect(created.body.clientId).toBe(input.clientId);
+    expect(created.body.projectId).toBe(input.projectId);
+    const [client, project] = await Promise.all([
+      db.client.findUniqueOrThrow({ where: { id: input.clientId } }),
+      db.project.findUniqueOrThrow({ where: { id: input.projectId } }),
+    ]);
+    expect(created.body.clientRegistrationNumberSnapshot).toBe(
+      client.registrationNumber,
+    );
+    expect(created.body.projectCodeSnapshot).toBe(project.projectCode);
+    const listing = await viewer
+      .get(`/api/projects/${input.projectId}/estimates`)
+      .expect(200);
+    expect(
+      listing.body.data.some(
+        (row: { id: string }) => row.id === created.body.id,
+      ),
+    ).toBe(true);
+    await viewer.get(`/api/projects/${randomUUID()}/estimates`).expect(404);
+    await db.estimate.delete({ where: { id: created.body.id } });
   });
   it("persists a draft and its audit record atomically", async () => {
     const result = await admin
@@ -345,6 +416,53 @@ describe("real PostgreSQL HTTP workflow", () => {
     expect(updated.body.title).toBe("New project");
     expect(updated.body.clientName).toBe("Renamed client");
     input.projectId = next.body.id;
+  });
+  it("rejects cross-Client Project mismatches and refreshes snapshots on a valid Draft move", async () => {
+    const targetClient = await write(admin, tokens.admin, "/api/clients", {
+      ...clientBody("Move target"),
+      registrationNumber: `MOVE-${randomUUID()}`,
+    }).expect(201);
+    clientIds.push(targetClient.body.id);
+    const targetProject = await write(
+      admin,
+      tokens.admin,
+      `/api/clients/${targetClient.body.id}/projects`,
+      projectBody("Target Project", `TARGET-${randomUUID()}`),
+    ).expect(201);
+    projectIds.push(targetProject.body.id);
+    const source = await write(
+      admin,
+      tokens.admin,
+      "/api/estimates",
+      input,
+    ).expect(201);
+    estimateIds.push(source.body.id);
+    const endpoint = `/api/estimates/${source.body.id}`;
+    await admin
+      .put(endpoint)
+      .set("Origin", config.ODAN_ORIGIN)
+      .set("x-csrf-token", tokens.admin)
+      .send({ ...input, projectId: targetProject.body.id, version: 1 })
+      .expect(400);
+    const moved = await admin
+      .put(endpoint)
+      .set("Origin", config.ODAN_ORIGIN)
+      .set("x-csrf-token", tokens.admin)
+      .send({
+        ...input,
+        clientId: targetClient.body.id,
+        projectId: targetProject.body.id,
+        version: 1,
+      })
+      .expect(200);
+    expect(moved.body.clientId).toBe(targetClient.body.id);
+    expect(moved.body.projectId).toBe(targetProject.body.id);
+    expect(moved.body.clientName).toBe("Move target");
+    expect(moved.body.title).toBe("Target Project");
+    expect(moved.body.clientRegistrationNumberSnapshot).toBe(
+      targetClient.body.registrationNumber,
+    );
+    expect(moved.body.projectCodeSnapshot).toBe(targetProject.body.projectCode);
   });
   it("rejects a viewer mutation and audit access", async () => {
     await viewer

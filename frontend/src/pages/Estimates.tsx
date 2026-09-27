@@ -2,13 +2,11 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api, money } from "../lib/api";
-import { useAuth } from "../auth";
 import { StatusBadge } from "../components/StatusBadge";
 import type { Estimate } from "../types";
 export function Estimates() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const { session } = useAuth();
   const query = useQuery({
     queryKey: ["estimates", search, page],
     queryFn: () =>
@@ -26,11 +24,6 @@ export function Estimates() {
             Thoughtful planning. Accurate numbers. Strong foundations.
           </p>
         </div>
-        {session?.user?.role !== "VIEWER" && (
-          <Link className="button primary" to="/estimates/new">
-            ＋ New estimate
-          </Link>
-        )}
       </div>
       <section className="intro-card">
         <div>
@@ -71,7 +64,7 @@ export function Estimates() {
             <p>
               {search
                 ? "Try another project or client name."
-                : "Create an estimate and add your scope of work."}
+                : "Open a Client's Project to create an estimate."}
             </p>
           </div>
         ) : (
@@ -98,6 +91,9 @@ export function Estimates() {
                         {estimate.title}
                       </Link>
                       <small>{estimate.number}</small>
+                      {(!estimate.projectId || !estimate.clientId) && (
+                        <small>Unlinked historical estimate</small>
+                      )}
                     </td>
                     <td>{estimate.clientName}</td>
                     <td>

@@ -14,7 +14,7 @@ The Express request path is routes → controllers → services → repositories
 - Quantities have up to three decimals, rates two decimals. Decimal arithmetic rounds each line half-up to two decimals, sums rounded lines, then rounds tax once. The workbook uses the same formulas and includes cached totals.
 - Currencies are LKR, USD, GBP and EUR; amounts are never aggregated across currencies. Seed prices are illustrative, not market rates.
 - Lists are paginated (20 records). The audit screen shows the latest 100 events. Estimate line items are limited to 100.
-- New estimates select an active Client and one of that Client's active Projects, with an estimate date. Client and Project details are copied into estimate snapshots on creation and on a Draft relationship change. Historical unlinked estimates retain their snapshot text and remain exportable. Dashboard totals are calculated in the API with decimal arithmetic and grouped by currency.
+- Clients contain Projects; Projects contain Estimates. New estimates start from an active Project. The form displays its active Client and Project as read-only context and requires an estimate date. The API validates the relationship and copies Client and Project names, contact/address details, registration/VAT identifiers and Project code into estimate snapshots on creation and on a Draft relationship change. Three nullable snapshot columns were added without updating historical rows. Historical unlinked estimates retain their snapshot text and remain viewable/exportable in the global register; the application does not link them automatically. Dashboard totals are calculated in the API with decimal arithmetic and grouped by currency.
 
 ## Security
 

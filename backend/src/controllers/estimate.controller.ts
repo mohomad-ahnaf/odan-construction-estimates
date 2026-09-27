@@ -1,6 +1,11 @@
 import type { RequestHandler } from "express";
 import { z } from "zod";
-import { estimateSchema, updateSchema, statusSchema } from "../validation.js";
+import {
+  estimateSchema,
+  projectEstimateSchema,
+  updateSchema,
+  statusSchema,
+} from "../validation.js";
 import * as service from "../services/estimate.service.js";
 import * as exports from "../services/export.service.js";
 import { estimateRepository } from "../repositories/estimate.repository.js";
@@ -13,6 +18,33 @@ export const list: RequestHandler = async (req, res) => {
     })
     .parse(req.query);
   res.json(await service.listEstimates(query.search, query.page));
+};
+export const listForProject: RequestHandler = async (req, res) => {
+  const query = z
+    .object({
+      search: z.string().trim().max(160).default(""),
+      page: z.coerce.number().int().positive().max(100000).default(1),
+    })
+    .strict()
+    .parse(req.query);
+  res.json(
+    await service.listProjectEstimates(
+      id(req.params.projectId),
+      query.search,
+      query.page,
+    ),
+  );
+};
+export const createForProject: RequestHandler = async (req, res) => {
+  res
+    .status(201)
+    .json(
+      await service.createProjectEstimate(
+        id(req.params.projectId),
+        projectEstimateSchema.parse(req.body),
+        req.user!.id,
+      ),
+    );
 };
 export const get: RequestHandler = async (req, res) => {
   res.json(service.serialize(await service.getEstimate(id(req.params.id))));

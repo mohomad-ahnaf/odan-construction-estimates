@@ -4,7 +4,7 @@ import { Link, useParams } from "react-router-dom";
 import { api, money } from "../lib/api";
 import { useAuth } from "../auth";
 import { StatusBadge } from "../components/StatusBadge";
-import type { Estimate } from "../types";
+import type { Client, Estimate, Project } from "../types";
 export function EstimateDetail() {
   const { id } = useParams();
   const { session } = useAuth();
@@ -15,6 +15,16 @@ export function EstimateDetail() {
     queryKey: ["estimate", id],
     queryFn: () => api<Estimate>(`/estimates/${id}`),
   });
+  const project = useQuery({
+    queryKey: ["project", query.data?.projectId],
+    queryFn: () => api<Project>(`/projects/${query.data?.projectId}`),
+    enabled: !!query.data?.projectId,
+  });
+  const owner = useQuery({
+    queryKey: ["client", query.data?.clientId],
+    queryFn: () => api<Client>(`/clients/${query.data?.clientId}`),
+    enabled: !!query.data?.clientId,
+  });
   const mutation = useMutation({
     mutationFn: (status: string) =>
       api<Estimate>(`/estimates/${id}/status`, {
@@ -24,6 +34,10 @@ export function EstimateDetail() {
     onSuccess: async (estimate) => {
       client.setQueryData(["estimate", id], estimate);
       await client.invalidateQueries({ queryKey: ["estimates"] });
+      if (estimate.projectId)
+        await client.invalidateQueries({
+          queryKey: ["project-estimates", estimate.projectId],
+        });
     },
   });
   async function download(format: string) {
@@ -47,17 +61,37 @@ export function EstimateDetail() {
   if (query.isPending) return <p>Loading estimate…</p>;
   if (query.isError) return <p role="alert">{query.error.message}</p>;
   const estimate = query.data;
-  const canEdit = session?.user?.role !== "VIEWER";
+  const linked = !!estimate.projectId && !!estimate.clientId;
+  const canEdit = session?.user?.role !== "VIEWER" && linked;
   return (
     <>
-      <Link className="back-link" to="/estimates">
-        ← Estimate register
-      </Link>
+      {linked ? (
+        <nav className="breadcrumbs" aria-label="Breadcrumb">
+          <Link to="/clients">Clients</Link>
+          <span>›</span>
+          <Link to={`/clients/${estimate.clientId}?tab=projects`}>
+            {owner.data?.name ?? estimate.clientName}
+          </Link>
+          <span>›</span>
+          <Link to={`/projects/${estimate.projectId}`}>
+            {project.data?.projectName ?? estimate.title}
+          </Link>
+          <span>›</span>
+          <span aria-current="page">Estimate {estimate.number}</span>
+        </nav>
+      ) : (
+        <nav className="breadcrumbs" aria-label="Breadcrumb">
+          <Link to="/estimates">Estimates</Link>
+          <span>›</span>
+          <span aria-current="page">{estimate.number}</span>
+        </nav>
+      )}
       <div className="page-heading">
         <div>
           <span className="eyebrow">{estimate.number}</span>
           <h1>{estimate.title}</h1>
           <StatusBadge status={estimate.status} />
+          {!linked && <p className="muted">Unlinked historical estimate</p>}
         </div>
         <div className="action-group">
           <button disabled={exporting} onClick={() => void download("xlsx")}>
@@ -92,6 +126,15 @@ export function EstimateDetail() {
           <div>
             <span className="eyebrow">PREPARED FOR</span>
             <h3>{estimate.clientName}</h3>
+            {estimate.clientRegistrationNumberSnapshot && (
+              <p>Registration: {estimate.clientRegistrationNumberSnapshot}</p>
+            )}
+            {estimate.clientVatNumberSnapshot && (
+              <p>VAT: {estimate.clientVatNumberSnapshot}</p>
+            )}
+            {estimate.projectCodeSnapshot && (
+              <p>Project code: {estimate.projectCodeSnapshot}</p>
+            )}
             <p>{estimate.clientEmail}</p>
             <p>{estimate.siteAddress}</p>
           </div>

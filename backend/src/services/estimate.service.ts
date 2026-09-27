@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Role, EstimateStatus } from "@prisma/client";
 import { estimateRepository as repo } from "../repositories/estimate.repository.js";
-import type { EstimateInput } from "../validation.js";
+import type { EstimateInput, ProjectEstimateInput } from "../validation.js";
 import { totals } from "./totals.js";
 import { AppError } from "../middleware/errors.js";
 type RecordWithItems = NonNullable<Awaited<ReturnType<typeof repo.get>>>;
@@ -23,6 +23,28 @@ export async function getEstimate(id: string) {
 export async function listEstimates(search: string, page: number) {
   const [records, total] = await repo.list(search, page);
   return { data: records.map(serialize), total, page, pageSize: 20 };
+}
+export async function listProjectEstimates(
+  projectId: string,
+  search: string,
+  page: number,
+) {
+  if (!(await repo.project(projectId)))
+    throw new AppError(404, "Project not found");
+  const [records, total] = await repo.listForProject(projectId, search, page);
+  return { data: records.map(serialize), total, page, pageSize: 20 };
+}
+export async function createProjectEstimate(
+  projectId: string,
+  input: ProjectEstimateInput,
+  actorId: string,
+) {
+  const project = await repo.project(projectId);
+  if (!project) throw new AppError(404, "Project not found");
+  return createEstimate(
+    { ...input, projectId, clientId: project.clientId },
+    actorId,
+  );
 }
 export async function createEstimate(input: EstimateInput, actorId: string) {
   return serialize(
