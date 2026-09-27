@@ -10,6 +10,13 @@ const dummyHash = argon2.hash(randomBytes(32), {
   timeCost: 3,
   parallelism: 1,
 });
+export const hashPassword = (password: string) =>
+  argon2.hash(password, {
+    type: argon2.argon2id,
+    memoryCost: 65536,
+    timeCost: 3,
+    parallelism: 1,
+  });
 export async function createSession(userId?: string) {
   const token = randomBytes(32).toString("hex");
   const csrfToken = randomBytes(32).toString("hex");
@@ -33,4 +40,24 @@ export async function authenticate(email: string, password: string) {
   }
   await repo.audit("AUTH_LOGIN", user.id);
   return user;
+}
+export async function changePassword(
+  userId: string,
+  sessionId: string,
+  currentPassword: string,
+  newPassword: string,
+) {
+  const user = await repo.userById(userId);
+  if (!user || !(await argon2.verify(user.passwordHash, currentPassword)))
+    throw new AppError(401, "Invalid credentials");
+  if (currentPassword === newPassword)
+    throw new AppError(400, "Choose a different password");
+  const changed = await repo.replacePassword({
+    userId,
+    expectedHash: user.passwordHash,
+    newHash: await hashPassword(newPassword),
+    keepSessionId: sessionId,
+    action: "AUTH_PASSWORD_CHANGED",
+  });
+  if (!changed) throw new AppError(401, "Invalid credentials");
 }

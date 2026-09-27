@@ -1,8 +1,12 @@
 import type { RequestHandler } from "express";
-import { createSession, authenticate } from "../services/auth.service.js";
+import {
+  createSession,
+  authenticate,
+  changePassword as updatePassword,
+} from "../services/auth.service.js";
 import { authRepository } from "../repositories/auth.repository.js";
 import { cookieName, cookieOptions } from "../middleware/auth.js";
-import { loginSchema } from "../validation.js";
+import { loginSchema, changePasswordSchema } from "../validation.js";
 export const session: RequestHandler = async (req, res) => {
   if (!req.session) {
     const created = await createSession();
@@ -43,5 +47,15 @@ export const logout: RequestHandler = async (req, res) => {
   if (req.session) await authRepository.remove(req.session.id);
   await authRepository.audit("AUTH_LOGOUT", req.user?.id);
   res.clearCookie(cookieName, cookieOptions);
+  res.status(204).end();
+};
+export const changePassword: RequestHandler = async (req, res) => {
+  const input = changePasswordSchema.parse(req.body);
+  await updatePassword(
+    req.user!.id,
+    req.session!.id,
+    input.currentPassword,
+    input.newPassword,
+  );
   res.status(204).end();
 };

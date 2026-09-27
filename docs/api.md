@@ -10,6 +10,8 @@ All endpoints are under `/api`. The frontend and API share an origin through Vit
 
 Every POST, PUT and PATCH requires the exact configured `Origin` and an `X-CSRF-Token` matching the current session. Send cookies with requests. Do not store passwords or session tokens in local storage. Anonymous access is limited to session initialization, login and `/health`.
 
+`POST /auth/change-password` requires a signed-in session, the existing CSRF and Origin checks, and is limited to five attempts per 15 minutes. Send `{ "currentPassword": "...", "newPassword": "..." }`; the new password must contain 16–128 characters and differ from the current password. Success returns 204, keeps the current session and revokes all other sessions. A wrong current password returns a generic 401 error. The password update, session revocation and `AUTH_PASSWORD_CHANGED` audit event occur in one transaction; no password or hash is included in the response or audit record.
+
 ## Estimates
 
 | Method | Path                         | Behavior                                                             |

@@ -6,6 +6,7 @@ import { Estimates } from "./pages/Estimates";
 import { EstimateEditor } from "./pages/EstimateEditor";
 import { EstimateDetail } from "./pages/EstimateDetail";
 import { Audit } from "./pages/Audit";
+import { ChangePassword } from "./pages/ChangePassword";
 export function App() {
   const { session, loading, error, refresh } = useAuth();
   if (loading)
@@ -33,6 +34,7 @@ export function App() {
           </>
         )}
         <Route path="/estimates/:id" element={<EstimateDetail />} />
+        <Route path="/account/password" element={<ChangePassword />} />
         {session.user.role === "ADMIN" && (
           <Route path="/audit" element={<Audit />} />
         )}

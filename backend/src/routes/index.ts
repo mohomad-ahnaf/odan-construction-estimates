@@ -18,10 +18,18 @@ const exportLimit = rateLimit({
   legacyHeaders: false,
   message: { message: "Please wait before exporting again." },
 });
+const passwordLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 5,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: { message: "Too many attempts. Try again later." },
+});
 routes.get("/auth/session", auth.session);
 routes.post("/auth/login", authLimit, auth.login);
 routes.post("/auth/logout", requireAuth, auth.logout);
 routes.use(requireAuth);
+routes.post("/auth/change-password", passwordLimit, auth.changePassword);
 routes.get("/estimates", estimates.list);
 routes.post("/estimates", allow("ADMIN", "ESTIMATOR"), estimates.create);
 routes.get("/estimates/:id", estimates.get);

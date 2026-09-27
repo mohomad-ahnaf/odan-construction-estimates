@@ -13,6 +13,7 @@
     "db:migrate": "node scripts/prisma.mjs migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
     "user:create": "tsx scripts/create-user.ts",
+    "user:recover": "tsx scripts/reset-password.ts",
     "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {

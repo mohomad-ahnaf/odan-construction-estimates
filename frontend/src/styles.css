@@ -188,6 +188,25 @@ nav a.active {
   text-transform: capitalize;
   color: #a6bbaa;
 }
+.sidebar-bottom a {
+  color: #e8eee8;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.account-page {
+  max-width: 520px;
+}
+.account-page form {
+  display: grid;
+  gap: 18px;
+  padding: 28px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: white;
+}
+.account-page .primary {
+  justify-self: start;
+}
 .avatar {
   display: grid;
   place-items: center;

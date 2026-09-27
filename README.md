@@ -72,6 +72,17 @@ npm run db:seed
 
 `npm run dev` serves the frontend at `127.0.0.1:43187` and API at `127.0.0.1:43188`. Frontend changes reload automatically; restart the combined command after backend changes. Integration and browser tests require the configured database; browser tests also require Chrome or Chromium. Stop `npm run dev` before running `test:e2e` because Playwright starts its own servers.
 
+## Recover access to an existing account
+
+From Command Prompt in this repository, run:
+
+```cmd
+cd /d "F:\Odan Construction\Estimation Web\odan-construction-estimates"
+npm run user:recover -w backend
+```
+
+At the interactive prompts, enter the **existing account email** (for example, `YOUR_ADMIN_EMAIL@example.com`), then enter and confirm a new password of 16–128 characters. Password entry is masked; never put a password in a command argument, redirected file or terminal history. The command only resets an existing account identified by its normalized email. It does not create users or change roles. It revokes every session for that account, so sign in again with the new password. It records a password-free audit event. An unknown email receives a generic error.
+
 ## Project structure
 
 ```text

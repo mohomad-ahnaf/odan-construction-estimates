@@ -28,6 +28,7 @@ export function Layout() {
           <span className="avatar">{session?.user?.name.slice(0, 1)}</span>
           <strong>{session?.user?.name}</strong>
           <small>{session?.user?.role.toLowerCase()}</small>
+          <NavLink to="/account/password">Change password</NavLink>
           <button
             className="text-button"
             onClick={() => void signOut().catch((e) => setError(e.message))}
