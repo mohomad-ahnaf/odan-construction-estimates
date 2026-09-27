@@ -1,0 +1,70 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+}
+enum Role {
+  ADMIN
+  ESTIMATOR
+  VIEWER
+}
+enum EstimateStatus {
+  DRAFT
+  SENT
+  APPROVED
+  REJECTED
+}
+model User {
+  id String @id @default(uuid())
+  email String @unique
+  name String
+  passwordHash String
+  role Role @default(VIEWER)
+  sessions Session[]
+  createdAt DateTime @default(now())
+}
+model Session {
+  id String @id
+  csrfToken String
+  userId String?
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  @@index([expiresAt])
+}
+model Estimate {
+  id String @id @default(uuid())
+  number String @unique
+  title String
+  clientName String
+  clientEmail String?
+  siteAddress String
+  currency String @default("LKR")
+  taxPercent Decimal @db.Decimal(5, 2)
+  notes String
+  status EstimateStatus @default(DRAFT)
+  version Int @default(1)
+  items EstimateItem[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+model EstimateItem {
+  id String @id @default(uuid())
+  estimateId String
+  estimate Estimate @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  position Int
+  description String
+  unit String
+  quantity Decimal @db.Decimal(14, 3)
+  rate Decimal @db.Decimal(14, 2)
+  @@unique([estimateId, position])
+}
+model AuditLog {
+  id String @id @default(uuid())
+  actorId String?
+  action String
+  entityId String?
+  createdAt DateTime @default(now())
+  @@index([createdAt])
+}
