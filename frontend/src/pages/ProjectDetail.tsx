@@ -6,16 +6,19 @@ import { useAuth } from "../auth";
 import { StatusBadge } from "../components/StatusBadge";
 import { NavigableRow } from "../components/NavigableRow";
 import { estimateDescription } from "../lib/estimateDescription";
+import { ProjectDocuments } from "../components/ProjectDocuments";
 import type { Client, ClientEstimate, Estimate, Page, Project } from "../types";
 
 export function ProjectDetail() {
   const { id } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
-  const tab =
-    searchParams.get("tab") === "client-estimates"
-      ? "client-estimates"
-      : "estimates";
   const { session } = useAuth();
+  const requestedTab = searchParams.get("tab");
+  const tab =
+    requestedTab === "client-estimates" ||
+    (requestedTab === "documents" && session?.user?.role === "ADMIN")
+      ? requestedTab
+      : "estimates";
   const cache = useQueryClient();
   const [page, setPage] = useState(1);
   const [clientEstimatePage, setClientEstimatePage] = useState(1);
@@ -189,6 +192,16 @@ export function ProjectDetail() {
         >
           Client Estimates
         </button>
+        {session?.user?.role === "ADMIN" && (
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "documents"}
+            onClick={() => setSearchParams({ tab: "documents" })}
+          >
+            Documents
+          </button>
+        )}
       </div>
       {tab === "estimates" ? (
         <section className="panel" aria-labelledby="project-estimates-heading">
@@ -312,7 +325,7 @@ export function ProjectDetail() {
             </div>
           </div>
         </section>
-      ) : (
+      ) : tab === "client-estimates" ? (
         <section className="panel" aria-labelledby="client-estimates-heading">
           <div className="panel-toolbar project-estimate-toolbar">
             <div>
@@ -421,6 +434,8 @@ export function ProjectDetail() {
             </div>
           </div>
         </section>
+      ) : (
+        <ProjectDocuments projectId={id!} />
       )}
     </>
   );

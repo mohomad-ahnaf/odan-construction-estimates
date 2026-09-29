@@ -14,11 +14,13 @@ export async function api<T>(
   path: string,
   options: RequestInit = {},
 ): Promise<T> {
+  const isFormData =
+    typeof FormData !== "undefined" && options.body instanceof FormData;
   const response = await fetch(`/api${path}`, {
     ...options,
     credentials: "same-origin",
     headers: {
-      "Content-Type": "application/json",
+      ...(!isFormData && { "Content-Type": "application/json" }),
       "x-csrf-token": csrfToken,
       ...options.headers,
     },
@@ -33,11 +35,13 @@ export async function api<T>(
   return response.json();
 }
 export async function apiBlob(path: string, options: RequestInit = {}): Promise<Blob> {
+  const isFormData =
+    typeof FormData !== "undefined" && options.body instanceof FormData;
   const response = await fetch(`/api${path}`, {
     ...options,
     credentials: "same-origin",
     headers: {
-      "Content-Type": "application/json",
+      ...(!isFormData && { "Content-Type": "application/json" }),
       "x-csrf-token": csrfToken,
       ...options.headers,
     },

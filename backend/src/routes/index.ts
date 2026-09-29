@@ -91,6 +91,13 @@ routes.patch(
 );
 routes.get("/estimates", estimates.list);
 routes.get("/documents/:id", allow("ADMIN"), documents.get);
+routes.get("/documents/:id/versions", allow("ADMIN"), documents.versions);
+routes.post(
+  "/documents/:id/revision",
+  allow("ADMIN"),
+  documentUpload,
+  documents.revision,
+);
 routes.delete("/documents/:id", allow("ADMIN"), documents.remove);
 routes.post("/estimates", allow("ADMIN", "ESTIMATOR"), estimates.create);
 routes.get("/estimates/:id", estimates.get);

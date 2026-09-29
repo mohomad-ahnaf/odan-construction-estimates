@@ -127,6 +127,32 @@ export type Project = ProjectInput & {
   estimateCount?: number;
   latestEstimateValue?: { currency: string; total: string } | null;
 };
+export type DocumentCategory =
+  | "DRAWINGS"
+  | "IMAGES"
+  | "CONTRACTS"
+  | "BOQ"
+  | "REPORTS"
+  | "OTHER";
+export type ProjectDocument = {
+  id: string;
+  projectId: string;
+  uploadedBy: string;
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+  category: DocumentCategory;
+  googleDriveFileId: string;
+  googleDriveFolderId: string;
+  version: number;
+  revisionNote: string | null;
+  isLatest: boolean;
+  versionGroupId: string;
+  createdAt: string;
+  updatedAt: string;
+  links: { viewUrl: string; downloadUrl: string };
+  uploader: { id: string; name: string; email: string };
+};
 export type Dashboard = {
   activeProjects: number;
   activeClients: number;

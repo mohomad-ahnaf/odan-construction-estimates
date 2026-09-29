@@ -4,7 +4,10 @@ const mocks = vi.hoisted(() => ({
   findProject: vi.fn(),
   listForProject: vi.fn(),
   get: vi.fn(),
-  create: vi.fn(),
+  history: vi.fn(),
+  findLatestByCombination: vi.fn(),
+  createInitial: vi.fn(),
+  createRevision: vi.fn(),
   remove: vi.fn(),
   getAuthenticatedDriveClient: vi.fn(),
   ensureProjectDriveFolders: vi.fn(),
@@ -18,7 +21,10 @@ vi.mock("../repositories/document.repository.js", () => ({
     findProject: mocks.findProject,
     listForProject: mocks.listForProject,
     get: mocks.get,
-    create: mocks.create,
+    history: mocks.history,
+    findLatestByCombination: mocks.findLatestByCombination,
+    createInitial: mocks.createInitial,
+    createRevision: mocks.createRevision,
     remove: mocks.remove,
   },
 }));
@@ -36,6 +42,8 @@ vi.mock("./google-drive.service.js", () => ({
 }));
 
 import {
+  getDocumentVersions,
+  uploadDocumentRevision,
   uploadProjectDocument,
   validateDocumentFile,
 } from "./document.service.js";
@@ -72,7 +80,19 @@ describe("project document service", () => {
       categories: { Other: "folder-other" },
     });
     mocks.uploadDriveFile.mockResolvedValue({ id: "drive-file-1" });
-    mocks.create.mockImplementation(async (input) => ({ id: "document-1", ...input }));
+    mocks.findLatestByCombination.mockResolvedValue(null);
+    mocks.createInitial.mockImplementation(async (input) => ({
+      ...input,
+      version: 1,
+      isLatest: true,
+      versionGroupId: input.id,
+    }));
+    mocks.createRevision.mockImplementation(async (_id, input) => ({
+      ...input,
+      version: 2,
+      isLatest: true,
+      versionGroupId: "group-1",
+    }));
     mocks.deleteDriveFile.mockResolvedValue(true);
   });
 
@@ -103,7 +123,7 @@ describe("project document service", () => {
       {},
       expect.objectContaining({ folderId: "folder-other" }),
     );
-    const stored = mocks.create.mock.calls[0]![0];
+    const stored = mocks.createInitial.mock.calls[0]![0];
     expect(stored).toMatchObject({
       projectId: "project-1",
       uploadedBy: "user-1",
@@ -114,8 +134,62 @@ describe("project document service", () => {
     expect(result.links.viewUrl).toBe("view/drive-file-1");
   });
 
+  it("creates a new version instead of overwriting a matching document", async () => {
+    mocks.findLatestByCombination.mockResolvedValueOnce({ id: "document-1" });
+    const result = await uploadProjectDocument(
+      "project-1",
+      "OTHER",
+      uploadedFile(),
+      "user-1",
+      "Updated dimensions",
+    );
+    expect(mocks.createInitial).not.toHaveBeenCalled();
+    expect(mocks.createRevision).toHaveBeenCalledWith(
+      "document-1",
+      expect.objectContaining({
+        revisionNote: "Updated dimensions",
+        googleDriveFileId: "drive-file-1",
+      }),
+    );
+    expect(result.version).toBe(2);
+  });
+
+  it("uploads an explicit revision and returns ordered history", async () => {
+    mocks.get.mockResolvedValue({
+      id: "document-1",
+      projectId: "project-1",
+      category: "DRAWINGS",
+      googleDriveFolderId: "folder-drawings",
+      versionGroupId: "group-1",
+    });
+    await uploadDocumentRevision(
+      "document-1",
+      uploadedFile("site-plan-r2.pdf"),
+      "user-1",
+      "Consultant update",
+    );
+    expect(mocks.uploadDriveFile).toHaveBeenCalledWith(
+      {},
+      expect.objectContaining({
+        folderId: "folder-drawings",
+        fileName: "site-plan-r2.pdf",
+      }),
+    );
+    expect(mocks.createRevision).toHaveBeenCalledWith(
+      "document-1",
+      expect.objectContaining({ category: "DRAWINGS" }),
+    );
+
+    mocks.history.mockResolvedValueOnce([
+      { googleDriveFileId: "drive-file-2", version: 2 },
+      { googleDriveFileId: "drive-file-1", version: 1 },
+    ]);
+    const history = await getDocumentVersions("document-1");
+    expect(history.map((record) => record.version)).toEqual([2, 1]);
+  });
+
   it("removes the Drive file if the metadata transaction fails", async () => {
-    mocks.create.mockRejectedValueOnce(new Error("database unavailable"));
+    mocks.createInitial.mockRejectedValueOnce(new Error("database unavailable"));
     await expect(
       uploadProjectDocument(
         "project-1",

@@ -1,4 +1,5 @@
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import type { DocumentCategory } from "@prisma/client";
 import { AppError } from "../middleware/errors.js";
 import { maximumDocumentBytes } from "../middleware/document-upload.js";
@@ -60,6 +61,7 @@ export async function uploadProjectDocument(
   category: DocumentCategory,
   file: Express.Multer.File,
   actorId: string,
+  revisionNote: string | null = null,
 ) {
   const validated = validateDocumentFile(file);
   const project = await documentRepository.findProject(projectId);
@@ -74,6 +76,11 @@ export async function uploadProjectDocument(
     project.projectName,
   );
   const folderId = folders.categories[categoryFolders[category]];
+  const existing = await documentRepository.findLatestByCombination(
+    projectId,
+    category,
+    validated.fileName,
+  );
   const uploaded = await uploadDriveFile(drive, {
     folderId,
     fileName: validated.fileName,
@@ -82,7 +89,8 @@ export async function uploadProjectDocument(
   });
 
   try {
-    const document = await documentRepository.create({
+    const input = {
+      id: randomUUID(),
       projectId,
       uploadedBy: actorId,
       fileName: validated.fileName,
@@ -91,6 +99,46 @@ export async function uploadProjectDocument(
       category,
       googleDriveFileId: uploaded.id!,
       googleDriveFolderId: folderId,
+      revisionNote,
+    };
+    const document = existing
+      ? await documentRepository.createRevision(existing.id, input)
+      : await documentRepository.createInitial(input);
+    return serializeDocument(document);
+  } catch (error) {
+    await deleteDriveFile(drive, uploaded.id!).catch(() => undefined);
+    throw error;
+  }
+}
+
+export async function uploadDocumentRevision(
+  documentId: string,
+  file: Express.Multer.File,
+  actorId: string,
+  revisionNote: string | null,
+) {
+  const validated = validateDocumentFile(file);
+  const base = await documentRepository.get(documentId);
+  if (!base) throw new AppError(404, "Document not found");
+  const drive = await getAuthenticatedDriveClient();
+  const uploaded = await uploadDriveFile(drive, {
+    folderId: base.googleDriveFolderId,
+    fileName: validated.fileName,
+    mimeType: validated.mimeType,
+    buffer: file.buffer,
+  });
+  try {
+    const document = await documentRepository.createRevision(documentId, {
+      id: randomUUID(),
+      projectId: base.projectId,
+      uploadedBy: actorId,
+      fileName: validated.fileName,
+      fileType: validated.mimeType,
+      fileSize: file.size,
+      category: base.category,
+      googleDriveFileId: uploaded.id!,
+      googleDriveFolderId: base.googleDriveFolderId,
+      revisionNote,
     });
     return serializeDocument(document);
   } catch (error) {
@@ -118,10 +166,18 @@ export async function getDocument(id: string) {
   return { ...serializeDocument(document), driveMetadata };
 }
 
+export async function getDocumentVersions(id: string) {
+  const document = await documentRepository.get(id);
+  if (!document) throw new AppError(404, "Document not found");
+  return (await documentRepository.history(document.versionGroupId)).map(
+    serializeDocument,
+  );
+}
+
 export async function deleteDocument(id: string, actorId: string) {
   const document = await documentRepository.get(id);
   if (!document) throw new AppError(404, "Document not found");
   const drive = await getAuthenticatedDriveClient();
   await deleteDriveFile(drive, document.googleDriveFileId);
-  await documentRepository.remove(id, actorId, document.projectId);
+  await documentRepository.remove(id, actorId);
 }
