@@ -24,6 +24,25 @@ export const googleDriveConnectionRepository = {
       orderBy: { updatedAt: "desc" },
     });
   },
+  latestWithTokens() {
+    return db.googleDriveConnection.findFirst({
+      orderBy: { updatedAt: "desc" },
+    });
+  },
+  updateTokens(
+    id: string,
+    input: {
+      accessToken?: string;
+      refreshToken?: string;
+      expiresAt?: Date | null;
+    },
+  ) {
+    return db.googleDriveConnection.update({
+      where: { id },
+      data: input,
+      select: safeSelect,
+    });
+  },
   async upsert(input: ConnectionInput, actorId: string) {
     return db.$transaction(async (tx) => {
       const connection = await tx.googleDriveConnection.upsert({

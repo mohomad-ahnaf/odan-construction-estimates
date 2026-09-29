@@ -25,6 +25,15 @@ enum ProjectStatus {
   ARCHIVED
 }
 
+enum DocumentCategory {
+  DRAWINGS
+  IMAGES
+  CONTRACTS
+  BOQ
+  REPORTS
+  OTHER
+}
+
 model User {
   id           String    @id @default(uuid())
   email        String    @unique
@@ -33,6 +42,7 @@ model User {
   role         Role      @default(VIEWER)
   sessions     Session[]
   clientEstimates ClientEstimate[]
+  documents    Document[]
   createdAt    DateTime  @default(now())
 }
 
@@ -72,6 +82,7 @@ model Project {
   updatedAt      DateTime      @updatedAt
   estimates      Estimate[]
   clientEstimates ClientEstimate[]
+  documents      Document[]
 
   @@index([clientId, status])
 }
@@ -220,4 +231,23 @@ model GoogleDriveConnection {
   expiresAt    DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+}
+
+model Document {
+  id                  String           @id @default(uuid())
+  projectId           String
+  project             Project          @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  uploadedBy          String
+  uploader            User             @relation(fields: [uploadedBy], references: [id], onDelete: Restrict)
+  fileName            String
+  fileType            String
+  fileSize            Int
+  category            DocumentCategory
+  googleDriveFileId   String           @unique
+  googleDriveFolderId String
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  @@index([projectId, createdAt])
+  @@index([uploadedBy])
 }

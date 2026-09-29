@@ -1,7 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { AppError } from "../middleware/errors.js";
 import {
   createOAuthState,
+  createDriveFolder,
   decryptGoogleToken,
   encryptGoogleToken,
   verifyOAuthState,
@@ -30,5 +31,25 @@ describe("Google Drive OAuth security", () => {
     expect(() => decryptGoogleToken(parts.join("."))).toThrow(
       "Stored Google authorization is invalid",
     );
+  });
+});
+
+describe("Google Drive folder management", () => {
+  it("reuses an existing folder under the requested parent", async () => {
+    const list = vi.fn().mockResolvedValue({
+      data: { files: [{ id: "existing-folder", name: "Projects" }] },
+    });
+    const create = vi.fn();
+    const drive = { files: { list, create } };
+
+    await expect(
+      createDriveFolder(drive as never, "Projects", "root-folder"),
+    ).resolves.toBe("existing-folder");
+    expect(list).toHaveBeenCalledWith(
+      expect.objectContaining({
+        q: expect.stringContaining("'root-folder' in parents"),
+      }),
+    );
+    expect(create).not.toHaveBeenCalled();
   });
 });

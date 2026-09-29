@@ -5,7 +5,9 @@ import * as estimates from "../controllers/estimate.controller.js";
 import * as clients from "../controllers/client.controller.js";
 import * as clientEstimates from "../controllers/client-estimate.controller.js";
 import * as pdfTemplateSettings from "../controllers/pdf-template-settings.controller.js";
+import * as documents from "../controllers/document.controller.js";
 import { requireAuth, allow } from "../middleware/auth.js";
+import { documentUpload } from "../middleware/document-upload.js";
 export const routes = Router();
 const authLimit = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -55,6 +57,17 @@ routes.post(
 routes.get("/clients/:id/estimates", clients.estimates);
 routes.get("/clients/:id/activity", allow("ADMIN"), clients.activity);
 routes.get("/projects/:id", clients.getProject);
+routes.get(
+  "/projects/:projectId/documents",
+  allow("ADMIN"),
+  documents.listForProject,
+);
+routes.post(
+  "/projects/:projectId/documents",
+  allow("ADMIN"),
+  documentUpload,
+  documents.upload,
+);
 routes.get("/projects/:projectId/estimates", estimates.listForProject);
 routes.post(
   "/projects/:projectId/estimates",
@@ -77,6 +90,8 @@ routes.patch(
   clients.statusProject,
 );
 routes.get("/estimates", estimates.list);
+routes.get("/documents/:id", allow("ADMIN"), documents.get);
+routes.delete("/documents/:id", allow("ADMIN"), documents.remove);
 routes.post("/estimates", allow("ADMIN", "ESTIMATOR"), estimates.create);
 routes.get("/estimates/:id", estimates.get);
 routes.put("/estimates/:id", allow("ADMIN", "ESTIMATOR"), estimates.update);
