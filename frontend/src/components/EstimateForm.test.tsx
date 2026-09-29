@@ -7,7 +7,7 @@ const context = {
   client: {
     id: "11111111-1111-4111-8111-111111111111",
     name: "Client A",
-    registrationNumber: "REG-A",
+    clientCode: "ODN-CLI-0001",
   } as Client,
   project: {
     id: "22222222-2222-4222-8222-222222222222",
@@ -17,14 +17,31 @@ const context = {
   } as Project,
 };
 describe("Project-scoped estimate form", () => {
+  it("requires a meaningful Estimate Description before saving", async () => {
+    const save = vi.fn();
+    render(<EstimateForm context={context} onSave={save} />);
+    fireEvent.change(screen.getByLabelText("Description 1"), {
+      target: { value: "Work" },
+    });
+    fireEvent.change(screen.getByLabelText("Estimate Description"), {
+      target: { value: "   " },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Save estimate/ }));
+    expect(
+      await screen.findByText("Enter an Estimate Description"),
+    ).toBeInTheDocument();
+    expect(save).not.toHaveBeenCalled();
+  });
   it("shows locked Client and Project context and requires estimate date", async () => {
     const save = vi.fn();
     render(
       <EstimateForm
         context={context}
         initial={{
+          description: "Ground Floor Construction",
           estimateDate: "",
           currency: "LKR",
+          markupPercent: 0,
           taxPercent: 0,
           notes: "",
           items: [{ description: "Work", unit: "m²", quantity: 1, rate: 20 }],
@@ -33,6 +50,7 @@ describe("Project-scoped estimate form", () => {
       />,
     );
     expect(screen.getByText(/Client A/)).toBeInTheDocument();
+    expect(screen.getByText(/Client Number ODN-CLI-0001/)).toBeInTheDocument();
     expect(screen.getByText(/Residence/)).toBeInTheDocument();
     expect(
       screen.queryByRole("combobox", { name: "Client" }),
@@ -49,6 +67,9 @@ describe("Project-scoped estimate form", () => {
   it("submits estimate fields without relationship IDs", async () => {
     const save = vi.fn().mockResolvedValue(undefined);
     render(<EstimateForm context={context} onSave={save} />);
+    fireEvent.change(screen.getByLabelText("Estimate Description"), {
+      target: { value: "  Ground Floor Construction  " },
+    });
     fireEvent.change(screen.getByLabelText("Description 1"), {
       target: { value: "Excavation" },
     });
@@ -57,6 +78,8 @@ describe("Project-scoped estimate form", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /Save estimate/ }));
     await waitFor(() => expect(save).toHaveBeenCalled());
+    expect(save.mock.calls[0][0].markupPercent).toBe(0);
+    expect(save.mock.calls[0][0].description).toBe("Ground Floor Construction");
     expect(save.mock.calls[0][0]).not.toHaveProperty("clientId");
     expect(save.mock.calls[0][0]).not.toHaveProperty("projectId");
   });
@@ -65,8 +88,10 @@ describe("Project-scoped estimate form", () => {
       <EstimateForm
         context={context}
         initial={{
+          description: "Roofing Work",
           estimateDate: "2026-09-27",
           currency: "LKR",
+          markupPercent: 0,
           taxPercent: 0,
           notes: "",
           items: [{ description: "Work", unit: "m²", quantity: 1, rate: 20 }],
@@ -80,4 +105,96 @@ describe("Project-scoped estimate form", () => {
     expect(await screen.findByText("Estimate changed")).toBeInTheDocument();
     expect(screen.getByLabelText("Description 1")).toHaveValue("Work");
   });
+  it("preserves a legacy unit and rejects pasted invalid decimal values", async () => {
+    const save = vi.fn();
+    render(
+      <EstimateForm
+        context={context}
+        initial={{
+          description: "Painting Work",
+          estimateDate: "2026-09-27",
+          currency: "LKR",
+          markupPercent: 0,
+          taxPercent: 0,
+          notes: "",
+          items: [
+            { description: "Work", unit: "custom-unit", quantity: 1, rate: 20 },
+          ],
+        }}
+        onSave={save}
+      />,
+    );
+    expect(screen.getByRole("combobox", { name: "Unit 1" })).toHaveValue(
+      "custom-unit",
+    );
+    expect(
+      screen.getByRole("option", { name: "custom-unit (legacy/custom)" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "m² — Square Metre" }),
+    ).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Quantity 1"), {
+      target: { value: "-1" },
+    });
+    fireEvent.change(screen.getByLabelText("Rate 1"), {
+      target: { value: "0.001" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Save estimate/ }));
+    expect(
+      await screen.findByText(
+        "Enter a positive quantity with up to 3 decimal places",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Enter a non-negative rate with up to 2 decimal places"),
+    ).toBeInTheDocument();
+    expect(save).not.toHaveBeenCalled();
+  });
+  it("previews markup before tax and rejects invalid markup", async () => {
+    const save = vi.fn();
+    render(<EstimateForm context={context} onSave={save} />);
+    fireEvent.change(screen.getByLabelText("Description 1"), {
+      target: { value: "Work" },
+    });
+    fireEvent.change(screen.getByLabelText("Rate 1"), {
+      target: { value: "100000" },
+    });
+    fireEvent.change(screen.getByLabelText("Markup (%)"), {
+      target: { value: "10" },
+    });
+    fireEvent.change(screen.getByLabelText("Tax (%)"), {
+      target: { value: "5" },
+    });
+    expect(screen.getByText(/115,500\.00/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Markup (%)"), {
+      target: { value: "100.001" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Save estimate/ }));
+    expect(
+      await screen.findByText(
+        "Enter markup from 0 to 100 with up to 2 decimal places",
+      ),
+    ).toBeInTheDocument();
+    expect(save).not.toHaveBeenCalled();
+  });
+  it.each(["-1", "abc", "101", "1.001"])(
+    "rejects invalid markup input %s",
+    async (markup) => {
+      const save = vi.fn();
+      render(<EstimateForm context={context} onSave={save} />);
+      fireEvent.change(screen.getByLabelText("Description 1"), {
+        target: { value: "Work" },
+      });
+      fireEvent.change(screen.getByLabelText("Markup (%)"), {
+        target: { value: markup },
+      });
+      fireEvent.click(screen.getByRole("button", { name: /Save estimate/ }));
+      expect(
+        await screen.findByText(
+          "Enter markup from 0 to 100 with up to 2 decimal places",
+        ),
+      ).toBeInTheDocument();
+      expect(save).not.toHaveBeenCalled();
+    },
+  );
 });

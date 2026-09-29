@@ -32,11 +32,13 @@ model User {
   passwordHash String
   role         Role      @default(VIEWER)
   sessions     Session[]
+  clientEstimates ClientEstimate[]
   createdAt    DateTime  @default(now())
 }
 
 model Client {
   id                 String     @id @default(uuid())
+  clientCode         String?    @unique
   name               String
   registrationNumber String?    @unique
   vatNumber          String?    @unique
@@ -50,6 +52,7 @@ model Client {
   updatedAt          DateTime   @updatedAt
   projects           Project[]
   estimates          Estimate[]
+  clientEstimates     ClientEstimate[]
 
   @@index([name])
 }
@@ -68,6 +71,7 @@ model Project {
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
   estimates      Estimate[]
+  clientEstimates ClientEstimate[]
 
   @@index([clientId, status])
 }
@@ -86,6 +90,7 @@ model Estimate {
   id           String         @id @default(uuid())
   number       String         @unique
   title        String
+  description  String?
   clientName   String
   clientEmail  String?
   clientRegistrationNumberSnapshot String?
@@ -98,16 +103,66 @@ model Estimate {
   estimateDate DateTime?      @db.Date
   siteAddress  String
   currency     String         @default("LKR")
+  markupPercent Decimal        @default(0) @db.Decimal(5, 2)
   taxPercent   Decimal        @db.Decimal(5, 2)
   notes        String
   status       EstimateStatus @default(DRAFT)
   version      Int            @default(1)
   items        EstimateItem[]
+  clientEstimateItems ClientEstimateItem[]
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
 
   @@index([clientId, createdAt])
   @@index([projectId])
+}
+
+model ClientEstimate {
+  id                    String             @id @default(uuid())
+  clientEstimateNumber  String             @unique
+  projectId             String
+  project               Project            @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  clientId              String
+  client                Client             @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  clientNameSnapshot    String
+  clientNumberSnapshot  String?
+  projectNameSnapshot   String
+  projectCodeSnapshot   String?
+  clientEstimateDate    DateTime           @db.Date
+  title                 String
+  currency              String
+  status                EstimateStatus     @default(DRAFT)
+  version               Int                @default(1)
+  notes                 String?
+  grandTotalSnapshot    Decimal            @db.Decimal(24, 2)
+  createdById           String
+  createdBy             User               @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  items                 ClientEstimateItem[]
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+
+  @@index([projectId, createdAt])
+  @@index([clientId, createdAt])
+}
+
+model ClientEstimateItem {
+  id                     String         @id @default(uuid())
+  clientEstimateId       String
+  clientEstimate         ClientEstimate @relation(fields: [clientEstimateId], references: [id], onDelete: Cascade)
+  sourceEstimateId       String
+  sourceEstimate         Estimate       @relation(fields: [sourceEstimateId], references: [id], onDelete: Restrict)
+  position               Int
+  estimateNumberSnapshot String
+  descriptionSnapshot    String
+  currencySnapshot       String
+  quantity               Decimal        @default(1) @db.Decimal(14, 3)
+  rateSnapshot           Decimal        @db.Decimal(24, 2)
+  amountSnapshot         Decimal        @db.Decimal(24, 2)
+  createdAt              DateTime       @default(now())
+
+  @@unique([clientEstimateId, sourceEstimateId])
+  @@unique([clientEstimateId, position])
+  @@index([sourceEstimateId])
 }
 
 model EstimateItem {
@@ -128,7 +183,41 @@ model AuditLog {
   actorId   String?
   action    String
   entityId  String?
+  metadata  Json?
   createdAt DateTime @default(now())
 
   @@index([createdAt])
+}
+
+model PdfTemplateSettings {
+  id                 Int      @id @default(1)
+  companyName        String   @default("Odan Construction")
+  companyAddress     String   @default("19B, Sujatha Avenue, Dehiwala")
+  companyPhone       String   @default("077 811 9382")
+  companyEmail       String   @default("odanconstruction@gmail.com")
+  logoData           Bytes?
+  logoMimeType       String?
+  documentTitle      String   @default("CONSTRUCTION ESTIMATE")
+  footerNote         String   @default("Note: Amounts shown in LKR. This estimate is based on the quantities and rates listed above and is subject to site conditions and material price variation.")
+  termsConditions    String   @default("")
+  primaryColor       String   @default("#06233F")
+  accentColor        String   @default("#C9A44C")
+  fontFamily         String   @default("Helvetica")
+  headerLayout       String   @default("LEFT")
+  watermarkEnabled   Boolean  @default(true)
+  watermarkOpacity   Float    @default(0.045)
+  watermarkSize      String   @default("MEDIUM")
+  tableStyle         String   @default("NAVY")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model GoogleDriveConnection {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  accessToken  String?
+  refreshToken String
+  expiresAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 }

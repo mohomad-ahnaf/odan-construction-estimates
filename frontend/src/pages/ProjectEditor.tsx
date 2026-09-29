@@ -28,17 +28,15 @@ export function ProjectEditor() {
   const current = project.data;
   const initial: ProjectInput | undefined = current
     ? {
-        projectCode: current.projectCode ?? "",
         projectName: current.projectName,
         siteAddress: current.siteAddress ?? "",
         description: current.description ?? "",
         startDate: current.startDate ?? "",
-        completionDate: current.completionDate ?? "",
       }
     : undefined;
   return (
     <>
-      <Link className="back-link" to={`/clients/${owner}?tab=projects`}>
+      <Link className="back-link" to={`/clients/${owner}`}>
         ← {client.data.name}
       </Link>
       <div className="page-heading">
@@ -46,6 +44,8 @@ export function ProjectEditor() {
       </div>
       <ProjectForm
         clientName={client.data.name}
+        clientNumber={client.data.clientCode}
+        projectCode={current?.projectCode}
         initial={initial}
         onSave={async (values) => {
           const result = await api<Project>(

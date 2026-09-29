@@ -17,9 +17,12 @@
     "reconcile:report": "tsx scripts/reconcile-estimates.ts report",
     "reconcile:preview": "tsx scripts/reconcile-estimates.ts preview",
     "reconcile:apply": "tsx scripts/reconcile-estimates.ts apply",
-    "test:integration": "vitest run --config vitest.integration.config.ts"
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:drive": "tsx scripts/test-google-drive.ts"
   },
   "dependencies": {
+    "@fontsource/inter": "^5.3.0",
+    "@fontsource/roboto": "^5.3.0",
     "@prisma/client": "6.19.0",
     "argon2": "^0.44.0",
     "cookie-parser": "^1.4.7",
@@ -27,6 +30,8 @@
     "exceljs": "^4.4.0",
     "express": "^5.1.0",
     "express-rate-limit": "^8.1.0",
+    "express-session": "^1.19.0",
+    "googleapis": "^182.0.0",
     "helmet": "^8.1.0",
     "pino": "^9.9.0",
     "pino-http": "^10.5.0",
@@ -40,7 +45,7 @@
     "@types/supertest": "^6.0.3",
     "prisma": "6.19.0",
     "supertest": "^7.1.0",
-    "tsx": "^4.20.0",
+    "tsx": "^4.23.15",
     "typescript": "^5.9.0",
     "vitest": "^5.0.2"
   }

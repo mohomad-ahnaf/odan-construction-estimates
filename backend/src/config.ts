@@ -26,5 +26,14 @@ export const config = z
       }, "Use PostgreSQL at localhost:5432 with the dedicated odan_estimation database"),
     ODAN_PORT: z.coerce.number().int().min(1024).max(65535).default(43188),
     ODAN_ORIGIN: z.string().url().default("http://127.0.0.1:43187"),
+    ODAN_PDF_LAUNCH_TIMEOUT_MS: z.coerce
+      .number()
+      .int()
+      .min(5000)
+      .max(90000)
+      .default(30000),
+    GOOGLE_CLIENT_ID: z.string().min(1),
+    GOOGLE_CLIENT_SECRET: z.string().min(1),
+    GOOGLE_REDIRECT_URI: z.string().url(),
   })
   .parse(local);

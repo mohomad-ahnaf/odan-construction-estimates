@@ -3,6 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api, money } from "../lib/api";
 import { StatusBadge } from "../components/StatusBadge";
+import { NavigableRow } from "../components/NavigableRow";
+import { estimateDescription } from "../lib/estimateDescription";
 import type { Estimate } from "../types";
 export function Estimates() {
   const [search, setSearch] = useState("");
@@ -82,7 +84,11 @@ export function Estimates() {
               </thead>
               <tbody>
                 {query.data.data.map((estimate) => (
-                  <tr key={estimate.id}>
+                  <NavigableRow
+                    key={estimate.id}
+                    to={`/estimates/${estimate.id}`}
+                    label={`Open estimate ${estimate.number}`}
+                  >
                     <td>
                       <Link
                         className="project-link"
@@ -91,6 +97,7 @@ export function Estimates() {
                         {estimate.title}
                       </Link>
                       <small>{estimate.number}</small>
+                      <small>{estimateDescription(estimate)}</small>
                       {(!estimate.projectId || !estimate.clientId) && (
                         <small>Unlinked historical estimate</small>
                       )}
@@ -113,7 +120,7 @@ export function Estimates() {
                         ↗
                       </Link>
                     </td>
-                  </tr>
+                  </NavigableRow>
                 ))}
               </tbody>
             </table>

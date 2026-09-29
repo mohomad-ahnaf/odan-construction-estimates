@@ -1,20 +1,35 @@
-import { randomUUID } from "node:crypto";
 import type { Role, EstimateStatus } from "@prisma/client";
 import { estimateRepository as repo } from "../repositories/estimate.repository.js";
-import type { EstimateInput, ProjectEstimateInput } from "../validation.js";
+import type {
+  EstimateInput,
+  EstimateUpdateInput,
+  ProjectEstimateInput,
+} from "../validation.js";
 import { totals } from "./totals.js";
 import { AppError } from "../middleware/errors.js";
 type RecordWithItems = NonNullable<Awaited<ReturnType<typeof repo.get>>>;
-export const serialize = (estimate: RecordWithItems) => ({
-  ...estimate,
-  taxPercent: Number(estimate.taxPercent),
-  items: estimate.items.map((item) => ({
-    ...item,
-    quantity: Number(item.quantity),
-    rate: Number(item.rate),
-  })),
-  totals: totals(estimate.items, estimate.taxPercent),
-});
+export const serialize = (estimate: RecordWithItems) => {
+  const {
+    client,
+    clientRegistrationNumberSnapshot,
+    clientVatNumberSnapshot,
+    ...safe
+  } = estimate;
+  void clientRegistrationNumberSnapshot;
+  void clientVatNumberSnapshot;
+  return {
+    ...safe,
+    clientNumber: client?.clientCode ?? null,
+    markupPercent: Number(estimate.markupPercent),
+    taxPercent: Number(estimate.taxPercent),
+    items: estimate.items.map((item) => ({
+      ...item,
+      quantity: Number(item.quantity),
+      rate: Number(item.rate),
+    })),
+    totals: totals(estimate.items, estimate.taxPercent, estimate.markupPercent),
+  };
+};
 export async function getEstimate(id: string) {
   const estimate = await repo.get(id);
   if (!estimate) throw new AppError(404, "Estimate not found");
@@ -28,10 +43,16 @@ export async function listProjectEstimates(
   projectId: string,
   search: string,
   page: number,
+  status?: EstimateStatus,
 ) {
   if (!(await repo.project(projectId)))
     throw new AppError(404, "Project not found");
-  const [records, total] = await repo.listForProject(projectId, search, page);
+  const [records, total] = await repo.listForProject(
+    projectId,
+    search,
+    page,
+    status,
+  );
   return { data: records.map(serialize), total, page, pageSize: 20 };
 }
 export async function createProjectEstimate(
@@ -41,23 +62,21 @@ export async function createProjectEstimate(
 ) {
   const project = await repo.project(projectId);
   if (!project) throw new AppError(404, "Project not found");
-  return createEstimate(
-    { ...input, projectId, clientId: project.clientId },
-    actorId,
-  );
-}
-export async function createEstimate(input: EstimateInput, actorId: string) {
+  const { copiedFromEstimateId, ...fields } = input;
   return serialize(
     await repo.create(
-      input,
-      `OD-${new Date().getFullYear()}-${randomUUID().slice(0, 8).toUpperCase()}`,
+      { ...fields, projectId, clientId: project.clientId },
       actorId,
+      copiedFromEstimateId,
     ),
   );
 }
+export async function createEstimate(input: EstimateInput, actorId: string) {
+  return serialize(await repo.create(input, actorId));
+}
 export async function updateEstimate(
   id: string,
-  input: EstimateInput,
+  input: EstimateUpdateInput,
   version: number,
   actorId: string,
 ) {

@@ -24,6 +24,7 @@ export const listForProject: RequestHandler = async (req, res) => {
     .object({
       search: z.string().trim().max(160).default(""),
       page: z.coerce.number().int().positive().max(100000).default(1),
+      status: z.enum(["DRAFT", "SENT", "APPROVED", "REJECTED"]).optional(),
     })
     .strict()
     .parse(req.query);
@@ -32,6 +33,7 @@ export const listForProject: RequestHandler = async (req, res) => {
       id(req.params.projectId),
       query.search,
       query.page,
+      query.status,
     ),
   );
 };

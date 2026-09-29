@@ -98,6 +98,13 @@ describe("Dashboard", () => {
     expect(await screen.findByText("No clients yet.")).toBeInTheDocument();
     expect(screen.getByText("No estimates yet.")).toBeInTheDocument();
     expect(screen.getByText("Approved Estimate Value")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Open Clients/ })).toHaveAttribute(
+      "href",
+      "/clients",
+    );
+    expect(
+      screen.getByRole("link", { name: /Open Estimates/ }),
+    ).toHaveAttribute("href", "/estimates");
   });
   it("shows client and estimate data", async () => {
     vi.mocked(api).mockImplementation(async (path: string) =>
@@ -111,6 +118,7 @@ describe("Dashboard", () => {
               {
                 id: "e",
                 number: "OD-1",
+                description: "Electrical Installation",
                 clientName: "Client A",
                 projectTitle: "Residence",
                 estimateDate: null,
@@ -143,5 +151,6 @@ describe("Dashboard", () => {
     view();
     expect((await screen.findAllByText("Client A")).length).toBeGreaterThan(0);
     expect(screen.getByText("OD-1")).toBeInTheDocument();
+    expect(screen.getByText("Electrical Installation")).toBeInTheDocument();
   });
 });

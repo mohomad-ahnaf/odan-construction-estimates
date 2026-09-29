@@ -4,6 +4,7 @@ import { Link, useParams } from "react-router-dom";
 import { api, money } from "../lib/api";
 import { useAuth } from "../auth";
 import { StatusBadge } from "../components/StatusBadge";
+import { estimateDescription } from "../lib/estimateDescription";
 import type { Client, Estimate, Project } from "../types";
 export function EstimateDetail() {
   const { id } = useParams();
@@ -69,7 +70,7 @@ export function EstimateDetail() {
         <nav className="breadcrumbs" aria-label="Breadcrumb">
           <Link to="/clients">Clients</Link>
           <span>›</span>
-          <Link to={`/clients/${estimate.clientId}?tab=projects`}>
+          <Link to={`/clients/${estimate.clientId}`}>
             {owner.data?.name ?? estimate.clientName}
           </Link>
           <span>›</span>
@@ -90,6 +91,7 @@ export function EstimateDetail() {
         <div>
           <span className="eyebrow">{estimate.number}</span>
           <h1>{estimate.title}</h1>
+          <p>{estimateDescription(estimate)}</p>
           <StatusBadge status={estimate.status} />
           {!linked && <p className="muted">Unlinked historical estimate</p>}
         </div>
@@ -120,17 +122,15 @@ export function EstimateDetail() {
           <div>
             <span className="eyebrow">CONSTRUCTION ESTIMATE</span>
             <p>{estimate.number}</p>
+            <p>{estimateDescription(estimate)}</p>
           </div>
         </div>
         <div className="document-meta">
           <div>
             <span className="eyebrow">PREPARED FOR</span>
             <h3>{estimate.clientName}</h3>
-            {estimate.clientRegistrationNumberSnapshot && (
-              <p>Registration: {estimate.clientRegistrationNumberSnapshot}</p>
-            )}
-            {estimate.clientVatNumberSnapshot && (
-              <p>VAT: {estimate.clientVatNumberSnapshot}</p>
+            {estimate.clientNumber && (
+              <p>Client Number: {estimate.clientNumber}</p>
             )}
             {estimate.projectCodeSnapshot && (
               <p>Project code: {estimate.projectCodeSnapshot}</p>
@@ -179,9 +179,21 @@ export function EstimateDetail() {
         </div>
         <div className="totals">
           <div>
-            <span>Subtotal</span>
+            <span>Base Subtotal</span>
             <strong>
-              {money(estimate.totals.subtotal, estimate.currency)}
+              {money(estimate.totals.baseSubtotal, estimate.currency)}
+            </strong>
+          </div>
+          <div>
+            <span>Markup ({estimate.markupPercent}%)</span>
+            <strong>
+              {money(estimate.totals.markupAmount, estimate.currency)}
+            </strong>
+          </div>
+          <div>
+            <span>Subtotal After Markup</span>
+            <strong>
+              {money(estimate.totals.subtotalAfterMarkup, estimate.currency)}
             </strong>
           </div>
           <div>
@@ -189,7 +201,7 @@ export function EstimateDetail() {
             <strong>{money(estimate.totals.tax, estimate.currency)}</strong>
           </div>
           <div className="grand-total">
-            <span>Estimate total</span>
+            <span>Final Total</span>
             <strong>{money(estimate.totals.total, estimate.currency)}</strong>
           </div>
         </div>

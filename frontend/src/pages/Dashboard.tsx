@@ -4,6 +4,8 @@ import { Link } from "react-router-dom";
 import { api, money } from "../lib/api";
 import type { Client, Dashboard as DashboardData, Page } from "../types";
 import { StatusBadge } from "../components/StatusBadge";
+import { NavigableRow } from "../components/NavigableRow";
+import { estimateDescription } from "../lib/estimateDescription";
 import { useAuth } from "../auth";
 const amounts = (values: Record<string, string>) =>
   Object.entries(values).length
@@ -53,19 +55,49 @@ export function Dashboard() {
         ) : (
           <>
             <article className="panel summary-card">
-              <span>Active Projects</span>
+              <div className="summary-card-top">
+                <span>Active Projects</span>
+                <span className="summary-icon" aria-hidden="true">
+                  PR
+                </span>
+              </div>
               <strong>{dashboard.data.activeProjects}</strong>
             </article>
-            <article className="panel summary-card">
-              <span>Active Clients</span>
+            <Link
+              className="panel summary-card summary-card-link"
+              to="/clients"
+              aria-label={`Open Clients, ${dashboard.data.activeClients} active`}
+            >
+              <div className="summary-card-top">
+                <span>Active Clients</span>
+                <span className="summary-icon" aria-hidden="true">
+                  CL
+                </span>
+              </div>
               <strong>{dashboard.data.activeClients}</strong>
-            </article>
-            <article className="panel summary-card">
-              <span>Total Estimates</span>
+              <span className="summary-card-prompt">View Clients →</span>
+            </Link>
+            <Link
+              className="panel summary-card summary-card-link"
+              to="/estimates"
+              aria-label={`Open Estimates, ${dashboard.data.totalEstimates} total`}
+            >
+              <div className="summary-card-top">
+                <span>Total Estimates</span>
+                <span className="summary-icon" aria-hidden="true">
+                  ES
+                </span>
+              </div>
               <strong>{dashboard.data.totalEstimates}</strong>
-            </article>
+              <span className="summary-card-prompt">View Estimates →</span>
+            </Link>
             <article className="panel summary-card">
-              <span>Approved Estimate Value</span>
+              <div className="summary-card-top">
+                <span>Approved Estimate Value</span>
+                <span className="summary-icon" aria-hidden="true">
+                  Σ
+                </span>
+              </div>
               <strong className="amount-stack">
                 {amounts(dashboard.data.approvedTotalsByCurrency)}
               </strong>
@@ -73,7 +105,7 @@ export function Dashboard() {
           </>
         )}
       </section>
-      <section className="panel">
+      <section className="panel dashboard-clients">
         <div className="panel-toolbar">
           <h2>All Clients</h2>
           <input
@@ -98,41 +130,38 @@ export function Dashboard() {
             {search ? "No clients match your search." : "No clients yet."}
           </p>
         ) : (
-          <div className="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>CLIENT</th>
-                  <th>CONTACT</th>
-                  <th>TELEPHONE</th>
-                  <th>EMAIL</th>
-                  <th>PROJECTS</th>
-                  <th>ESTIMATES</th>
-                  <th>TOTALS</th>
-                  <th>STATUS</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {clients.data.data.map((c) => (
-                  <tr key={c.id}>
-                    <td>{c.name}</td>
-                    <td>{c.contactPerson || "—"}</td>
-                    <td>{c.telephone || "—"}</td>
-                    <td>{c.email || "—"}</td>
-                    <td>{c.projectCount}</td>
-                    <td>{c.estimateCount}</td>
-                    <td className="amount-stack">
-                      {amounts(c.totalsByCurrency)}
-                    </td>
-                    <td>{c.active ? "Active" : "Inactive"}</td>
-                    <td>
-                      <Link to={`/clients/${c.id}`}>View</Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="dashboard-client-grid">
+            {clients.data.data.map((c) => (
+              <Link
+                key={c.id}
+                className="dashboard-client-card"
+                to={`/clients/${c.id}`}
+                aria-label={`View client ${c.name}`}
+              >
+                <div className="dashboard-client-heading">
+                  <h3>{c.name}</h3>
+                  <div className="dashboard-client-meta">
+                    <span className="dashboard-client-number">
+                      {c.clientCode ?? "Number unavailable"}
+                    </span>
+                    <StatusBadge status={c.active ? "ACTIVE" : "INACTIVE"} />
+                  </div>
+                </div>
+                <div className="dashboard-client-value">
+                  <span>Approved estimate value</span>
+                  <strong>{amounts(c.totalsByCurrency)}</strong>
+                </div>
+                <div className="dashboard-client-footer">
+                  <div className="dashboard-client-counts">
+                    <span><strong>{c.projectCount}</strong> projects</span>
+                    <span><strong>{c.estimateCount}</strong> estimates</span>
+                  </div>
+                  <span className="dashboard-client-view">
+                    View Client <span aria-hidden="true">→</span>
+                  </span>
+                </div>
+              </Link>
+            ))}
           </div>
         )}
         <div className="pagination">
@@ -155,7 +184,7 @@ export function Dashboard() {
           </div>
         </div>
       </section>
-      <section className="panel">
+      <section className="panel dashboard-recent-estimates">
         <h2>Recent 10 Estimates</h2>
         {dashboard.isPending ? (
           <p>Loading estimates…</p>
@@ -183,8 +212,15 @@ export function Dashboard() {
               </thead>
               <tbody>
                 {dashboard.data.recentEstimates.map((e) => (
-                  <tr key={e.id}>
-                    <td>{e.number}</td>
+                  <NavigableRow
+                    key={e.id}
+                    to={`/estimates/${e.id}`}
+                    label={`Open estimate ${e.number}`}
+                  >
+                    <td>
+                      {e.number}
+                      <small>{estimateDescription(e)}</small>
+                    </td>
                     <td>{e.clientName}</td>
                     <td>{e.projectTitle}</td>
                     <td>
@@ -200,7 +236,7 @@ export function Dashboard() {
                     <td>
                       <Link to={`/estimates/${e.id}`}>View</Link>
                     </td>
-                  </tr>
+                  </NavigableRow>
                 ))}
               </tbody>
             </table>

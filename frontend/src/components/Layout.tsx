@@ -12,20 +12,40 @@ export function Layout() {
     <div className="app-shell">
       <aside className="sidebar">
         <a className="brand" href="/">
-          <span className="brand-mark">O</span>
-          <span>
-            ODAN<small>CONSTRUCTION</small>
-          </span>
+          <img
+            src="/branding/odan-logo-transparent.png"
+            alt="Odan Construction"
+          />
         </a>
         <div className="nav-label">WORKSPACE</div>
-        <nav>
+        <nav aria-label="Main navigation">
           <NavLink to="/" end>
-            ◇ &nbsp; Dashboard
+            <span className="nav-icon" aria-hidden="true">
+              ▦
+            </span>{" "}
+            Dashboard
           </NavLink>
-          <NavLink to="/clients">◎ &nbsp; Clients</NavLink>
-          <NavLink to="/estimates">▦ &nbsp; Estimates</NavLink>
+          <NavLink to="/clients">
+            <span className="nav-icon" aria-hidden="true">
+              ◫
+            </span>{" "}
+            Clients
+          </NavLink>
+          <NavLink to="/estimates">
+            <span className="nav-icon" aria-hidden="true">
+              ▤
+            </span>{" "}
+            Estimates
+          </NavLink>
           {session?.user?.role === "ADMIN" && (
-            <NavLink to="/audit">◷ &nbsp; Audit trail</NavLink>
+            <>
+              <NavLink to="/audit">
+                <span className="nav-icon" aria-hidden="true">◷</span>{" "}Audit trail
+              </NavLink>
+              <NavLink to="/settings/pdf-template">
+                <span className="nav-icon" aria-hidden="true">⚙</span>{" "}Settings
+              </NavLink>
+            </>
           )}
         </nav>
         <div className="sidebar-bottom">

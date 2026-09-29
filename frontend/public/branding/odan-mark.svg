@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Odan Construction">
+  <rect width="64" height="64" rx="12" fill="#071A2F"/>
+  <path d="M7 42 32 25l25 17" fill="none" stroke="#D5A94E" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M17 35V19l11-5v18M36 31V9l12 5v20" fill="none" stroke="#E7C875" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M29 44h6v7h-6z" fill="#D5A94E"/>
+</svg>

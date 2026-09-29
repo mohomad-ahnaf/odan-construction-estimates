@@ -13,8 +13,10 @@ export type Item = {
 export type EstimateInput = {
   clientId: string;
   projectId: string;
+  description: string;
   estimateDate: string;
   currency: "LKR" | "USD" | "GBP" | "EUR";
+  markupPercent: number;
   taxPercent: number;
   notes: string;
   items: Item[];
@@ -22,16 +24,16 @@ export type EstimateInput = {
 export type EstimateFields = Omit<EstimateInput, "clientId" | "projectId">;
 export type Estimate = Omit<
   EstimateInput,
-  "clientId" | "projectId" | "estimateDate"
+  "clientId" | "projectId" | "estimateDate" | "description"
 > & {
+  description: string | null;
   clientId: string | null;
   projectId: string | null;
   estimateDate: string | null;
   title: string;
   clientName: string;
   clientEmail: string | null;
-  clientRegistrationNumberSnapshot: string | null;
-  clientVatNumberSnapshot: string | null;
+  clientNumber: string | null;
   projectCodeSnapshot: string | null;
   siteAddress: string;
   id: string;
@@ -40,7 +42,51 @@ export type Estimate = Omit<
   version: number;
   createdAt: string;
   updatedAt: string;
-  totals: { lines: string[]; subtotal: string; tax: string; total: string };
+  totals: {
+    lines: string[];
+    subtotal: string;
+    baseSubtotal: string;
+    markupAmount: string;
+    subtotalAfterMarkup: string;
+    tax: string;
+    total: string;
+  };
+};
+export type ClientEstimateInput = {
+  clientEstimateDate: string;
+  title: string;
+  notes: string;
+  items: { sourceEstimateId: string; refreshSnapshot?: boolean }[];
+};
+export type ClientEstimate = {
+  id: string;
+  clientEstimateNumber: string;
+  projectId: string;
+  clientId: string;
+  clientNameSnapshot: string;
+  clientNumberSnapshot: string | null;
+  projectNameSnapshot: string;
+  projectCodeSnapshot: string | null;
+  clientEstimateDate: string;
+  title: string;
+  notes: string | null;
+  currency: string;
+  status: Estimate["status"];
+  version: number;
+  grandTotal: string;
+  createdAt: string;
+  updatedAt: string;
+  items: {
+    id: string;
+    sourceEstimateId: string;
+    position: number;
+    estimateNumberSnapshot: string;
+    descriptionSnapshot: string;
+    currencySnapshot: string;
+    quantity: number;
+    rateSnapshot: string;
+    amountSnapshot: string;
+  }[];
 };
 export type Session = { user: User | null; csrfToken: string };
 export type Page<T> = {
@@ -52,8 +98,6 @@ export type Page<T> = {
 export type CurrencyTotals = Record<string, string>;
 export type ClientInput = {
   name: string;
-  registrationNumber: string;
-  vatNumber: string;
   address: string;
   contactPerson: string;
   telephone: string;
@@ -62,6 +106,7 @@ export type ClientInput = {
 };
 export type Client = ClientInput & {
   id: string;
+  clientCode: string | null;
   active: boolean;
   projectCount: number;
   estimateCount: number;
@@ -69,17 +114,18 @@ export type Client = ClientInput & {
   createdAt: string;
 };
 export type ProjectInput = {
-  projectCode: string;
   projectName: string;
   siteAddress: string;
   description: string;
   startDate: string;
-  completionDate: string;
 };
 export type Project = ProjectInput & {
   id: string;
   clientId: string;
+  projectCode: string | null;
   status: "ACTIVE" | "ARCHIVED";
+  estimateCount?: number;
+  latestEstimateValue?: { currency: string; total: string } | null;
 };
 export type Dashboard = {
   activeProjects: number;
@@ -89,6 +135,7 @@ export type Dashboard = {
   recentEstimates: {
     id: string;
     number: string;
+    description: string | null;
     clientName: string;
     projectTitle: string;
     estimateDate: string | null;

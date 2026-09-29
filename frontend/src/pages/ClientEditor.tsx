@@ -18,8 +18,6 @@ export function ClientEditor() {
   const initial: ClientInput | undefined = current
     ? {
         name: current.name,
-        registrationNumber: current.registrationNumber ?? "",
-        vatNumber: current.vatNumber ?? "",
         address: current.address ?? "",
         contactPerson: current.contactPerson ?? "",
         telephone: current.telephone ?? "",
@@ -37,6 +35,7 @@ export function ClientEditor() {
       </div>
       <ClientForm
         initial={initial}
+        clientCode={current?.clientCode}
         onSave={async (values) => {
           const result = await api<Client>(id ? `/clients/${id}` : "/clients", {
             method: id ? "PUT" : "POST",

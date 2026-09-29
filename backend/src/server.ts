@@ -3,6 +3,7 @@ import { config } from "./config.js";
 import { db } from "./db.js";
 import { logger } from "./logger.js";
 import { authRepository } from "./repositories/auth.repository.js";
+import { closePdfBrowser } from "./services/pdf-browser.js";
 await db.$connect();
 const server = app.listen(config.ODAN_PORT, "127.0.0.1", () =>
   logger.info({ port: config.ODAN_PORT }, "Odan API listening"),
@@ -24,7 +25,9 @@ for (const signal of ["SIGINT", "SIGTERM"])
   process.on(signal, () => {
     clearInterval(cleanup);
     server.close(() => {
-      void db.$disconnect().then(() => process.exit(0));
+      void Promise.allSettled([closePdfBrowser(), db.$disconnect()]).then(() =>
+        process.exit(0),
+      );
     });
     setTimeout(() => process.exit(1), 10000).unref();
   });

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api, money } from "../lib/api";
@@ -7,22 +8,20 @@ import type { Client, Project, Page } from "../types";
 export function ClientDetail() {
   const { id } = useParams();
   const [params, setParams] = useSearchParams();
-  const requestedTab = params.get("tab");
+  const [page, setPage] = useState(1);
+  const [actionError, setActionError] = useState("");
   const { session } = useAuth();
-  const tab =
-    requestedTab === "projects" ||
-    (requestedTab === "activity" && session?.user?.role === "ADMIN")
-      ? requestedTab
-      : "overview";
   const cache = useQueryClient();
+  const showActivity =
+    params.get("tab") === "activity" && session?.user?.role === "ADMIN";
   const client = useQuery({
     queryKey: ["client", id],
     queryFn: () => api<Client>(`/clients/${id}`),
   });
   const projects = useQuery({
-    queryKey: ["client-projects", id],
-    queryFn: () => api<Page<Project>>(`/clients/${id}/projects?pageSize=100`),
-    enabled: tab === "projects",
+    queryKey: ["client-projects", id, page],
+    queryFn: () =>
+      api<Page<Project>>(`/clients/${id}/projects?page=${page}&pageSize=100`),
   });
   const activity = useQuery({
     queryKey: ["client-activity", id],
@@ -30,7 +29,7 @@ export function ClientDetail() {
       api<Page<{ action: string; createdAt: string }>>(
         `/clients/${id}/activity?pageSize=100&sort=createdAt&direction=desc`,
       ),
-    enabled: tab === "activity" && session?.user?.role === "ADMIN",
+    enabled: showActivity,
   });
   if (client.isPending) return <p>Loading client…</p>;
   if (client.isError)
@@ -49,177 +48,170 @@ export function ClientDetail() {
         <span>›</span>
         <span aria-current="page">{c.name}</span>
       </nav>
-      <div className="page-heading">
+      <div className="page-heading workspace-heading">
         <div>
           <span className="eyebrow">CLIENT WORKSPACE</span>
           <h1>{c.name}</h1>
-          <p>{c.active ? "Active" : "Inactive"}</p>
+          <div className="heading-meta">
+            <span className="code-label">
+              Client Number: {c.clientCode ?? "Unavailable for legacy client"}
+            </span>
+            <span className={`status ${c.active ? "status-approved" : ""}`}>
+              {c.active ? "Active" : "Inactive"}
+            </span>
+          </div>
         </div>
-        <div className="action-group">
-          {canWrite && (
-            <>
-              <Link className="button" to={`/clients/${id}/edit`}>
-                Edit Client
-              </Link>
-              {c.active && (
-                <Link
-                  className="button primary"
-                  to={`/clients/${id}/projects/new`}
-                >
-                  Add Project
-                </Link>
-              )}
-              <button
-                onClick={async () => {
+        {canWrite && (
+          <div className="action-group">
+            <Link className="button" to={`/clients/${id}/edit`}>
+              Edit Client
+            </Link>
+            <button
+              onClick={async () => {
+                setActionError("");
+                try {
                   await api(`/clients/${id}/status`, {
                     method: "PATCH",
                     body: JSON.stringify({ active: !c.active }),
                   });
-                  await cache.invalidateQueries({ queryKey: ["client", id] });
-                  await cache.invalidateQueries({ queryKey: ["clients"] });
-                  await cache.invalidateQueries({ queryKey: ["dashboard"] });
-                }}
+                  await Promise.all([
+                    cache.invalidateQueries({ queryKey: ["client", id] }),
+                    cache.invalidateQueries({ queryKey: ["clients"] }),
+                    cache.invalidateQueries({ queryKey: ["dashboard"] }),
+                  ]);
+                } catch (error) {
+                  setActionError((error as Error).message);
+                }
+              }}
+            >
+              {c.active ? "Deactivate" : "Activate"}
+            </button>
+            {c.active && (
+              <Link
+                className="button primary"
+                to={`/clients/${id}/projects/new`}
               >
-                {c.active ? "Deactivate" : "Reactivate"}
-              </button>
-            </>
+                Add Project
+              </Link>
+            )}
+          </div>
+        )}
+      </div>
+      {actionError && (
+        <p className="error" role="alert">
+          {actionError}
+        </p>
+      )}
+      <section
+        className="workspace-section"
+        aria-labelledby="client-projects-heading"
+      >
+        <div className="section-heading">
+          <div>
+            <span className="eyebrow">CLIENT PROJECTS</span>
+            <h2 id="client-projects-heading">
+              Projects{" "}
+              <span className="muted">
+                ({projects.data?.total ?? c.projectCount})
+              </span>
+            </h2>
+          </div>
+          {session?.user?.role === "ADMIN" && (
+            <button
+              className="secondary-action"
+              onClick={() => setParams(showActivity ? {} : { tab: "activity" })}
+            >
+              {showActivity ? "Hide activity" : "Activity"}
+            </button>
           )}
         </div>
-      </div>
-      <nav className="detail-tabs" aria-label="Client sections">
-        {[
-          "overview",
-          "projects",
-          ...(session?.user?.role === "ADMIN" ? ["activity"] : []),
-        ].map((name) => (
-          <button
-            key={name}
-            className={tab === name ? "selected" : ""}
-            onClick={() => setParams({ tab: name })}
-          >
-            {name[0].toUpperCase() + name.slice(1)}
-          </button>
-        ))}
-      </nav>
-      {tab === "overview" && (
-        <section className="panel form-section">
-          <h2>Overview</h2>
-          <div className="summary-grid">
-            <p>
-              <strong>Projects</strong>
-              <br />
-              {c.projectCount}
-            </p>
-            <p>
-              <strong>Estimates across projects</strong>
-              <br />
-              {c.estimateCount}
-            </p>
-            <p>
-              <strong>Estimate totals across projects</strong>
-              <br />
-              {Object.entries(c.totalsByCurrency).length
-                ? Object.entries(c.totalsByCurrency).map(
-                    ([currency, value]) => (
-                      <span className="currency-amount" key={currency}>
-                        {money(value, currency)}
-                      </span>
-                    ),
-                  )
-                : "—"}
-            </p>
-          </div>
-          <div className="form-grid">
-            <p>
-              <strong>Contact person</strong>
-              <br />
-              {c.contactPerson || "—"}
-            </p>
-            <p>
-              <strong>Telephone</strong>
-              <br />
-              {c.telephone || "—"}
-            </p>
-            <p>
-              <strong>Email</strong>
-              <br />
-              {c.email || "—"}
-            </p>
-            <p>
-              <strong>Registration number</strong>
-              <br />
-              {c.registrationNumber || "—"}
-            </p>
-            <p>
-              <strong>VAT number</strong>
-              <br />
-              {c.vatNumber || "—"}
-            </p>
-            <p>
-              <strong>Address</strong>
-              <br />
-              {c.address || "—"}
-            </p>
-          </div>
-          <p>
-            <strong>Notes</strong>
-            <br />
-            {c.notes || "—"}
+        {projects.isPending ? (
+          <p className="empty panel">Loading projects…</p>
+        ) : projects.isError ? (
+          <p role="alert">
+            {projects.error.message}{" "}
+            <button onClick={() => void projects.refetch()}>Retry</button>
           </p>
-        </section>
-      )}
-      {tab === "projects" && (
-        <section className="panel form-section">
-          <h2>Projects</h2>
-          {projects.isPending ? (
-            <p>Loading projects…</p>
-          ) : projects.isError ? (
-            <p role="alert">
-              {projects.error.message}{" "}
-              <button onClick={() => void projects.refetch()}>Retry</button>
-            </p>
-          ) : projects.data.data.length === 0 ? (
-            <p>No projects yet.</p>
-          ) : (
-            <div className="table-scroll">
-              <table>
-                <thead>
-                  <tr>
-                    <th>PROJECT</th>
-                    <th>CODE</th>
-                    <th>SITE</th>
-                    <th>STATUS</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {projects.data.data.map((p) => (
-                    <tr key={p.id}>
-                      <td>{p.projectName}</td>
-                      <td>{p.projectCode || "—"}</td>
-                      <td>{p.siteAddress || "—"}</td>
-                      <td>{p.status}</td>
-                      <td>
-                        <Link to={`/projects/${p.id}`}>View</Link>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        ) : projects.data.data.length === 0 ? (
+          <div className="panel empty">
+            <p>No projects yet. Add a Project to start an estimate.</p>
+          </div>
+        ) : (
+          <div className="project-card-grid">
+            {projects.data.data.map((p) => (
+              <Link
+                className="panel project-card"
+                key={p.id}
+                to={`/projects/${p.id}`}
+                aria-label={`Open project ${p.projectName}`}
+              >
+                <div className="project-card-top">
+                  <span className="code-label">
+                    {p.projectCode ?? "Legacy project"}
+                  </span>
+                  <span
+                    className={`status ${p.status === "ACTIVE" ? "status-approved" : ""}`}
+                  >
+                    {p.status === "ACTIVE" ? "Active" : "Archived"}
+                  </span>
+                </div>
+                <h3>{p.projectName}</h3>
+                <div className="project-card-meta">
+                  <span>
+                    Start date{" "}
+                    <strong>
+                      {p.startDate
+                        ? new Date(
+                            `${p.startDate}T00:00:00Z`,
+                          ).toLocaleDateString("en-GB")
+                        : "Not set"}
+                    </strong>
+                  </span>
+                  <span>
+                    Estimates <strong>{p.estimateCount ?? 0}</strong>
+                  </span>
+                </div>
+                <div className="project-card-bottom">
+                  <span>
+                    {p.latestEstimateValue
+                      ? `Latest estimate ${money(p.latestEstimateValue.total, p.latestEstimateValue.currency)}`
+                      : "No estimates yet"}
+                  </span>
+                  <span aria-hidden="true">→</span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+        {(projects.data?.total ?? 0) > 100 && (
+          <div className="pagination">
+            <span>
+              Page {page} of {Math.ceil((projects.data?.total ?? 0) / 100)}
+            </span>
+            <div>
+              <button
+                disabled={page === 1}
+                onClick={() => setPage((value) => value - 1)}
+              >
+                Previous
+              </button>
+              <button
+                disabled={page * 100 >= (projects.data?.total ?? 0)}
+                onClick={() => setPage((value) => value + 1)}
+              >
+                Next
+              </button>
             </div>
-          )}
-        </section>
-      )}
-      {tab === "activity" && session?.user?.role === "ADMIN" && (
-        <section className="panel form-section">
+          </div>
+        )}
+      </section>
+      {showActivity && (
+        <section className="panel form-section secondary-panel">
           <h2>Activity</h2>
           {activity.isPending ? (
             <p>Loading activity…</p>
           ) : activity.isError ? (
-            <p role="alert">
-              {activity.error.message}{" "}
-              <button onClick={() => void activity.refetch()}>Retry</button>
-            </p>
+            <p role="alert">{activity.error.message}</p>
           ) : activity.data.data.length === 0 ? (
             <p>No activity yet.</p>
           ) : (

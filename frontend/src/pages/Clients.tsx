@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api, money } from "../lib/api";
 import { useAuth } from "../auth";
+import { StatusBadge } from "../components/StatusBadge";
 import type { Client, Page } from "../types";
 export function Clients() {
   const [search, setSearch] = useState("");
@@ -17,21 +18,14 @@ export function Clients() {
   });
   return (
     <>
-      <div className="page-heading">
+      <div className="page-heading clients-page-heading">
         <div>
-          <h1>Clients</h1>
-          <p className="muted">Manage client relationships and work.</p>
+          <h1>All Clients</h1>
+          <p className="muted">Manage construction clients and their projects</p>
         </div>
-        {session?.user?.role !== "VIEWER" && (
-          <Link className="button primary" to="/clients/new">
-            Add New Client
-          </Link>
-        )}
-      </div>
-      <section className="panel">
-        <div className="panel-toolbar">
-          <h2>Client register</h2>
+        <div className="clients-page-actions">
           <input
+            type="search"
             aria-label="Search clients"
             value={search}
             onChange={(e) => {
@@ -40,61 +34,85 @@ export function Clients() {
             }}
             placeholder="Search clients…"
           />
+          {session?.user?.role !== "VIEWER" && (
+            <Link className="button primary" to="/clients/new">
+              Add Client
+            </Link>
+          )}
         </div>
+      </div>
+      <section className="clients-directory" aria-label="Client directory">
         {query.isPending ? (
-          <p className="empty">Loading clients…</p>
+          <p className="empty clients-list-state">Loading clients…</p>
         ) : query.isError ? (
-          <p role="alert">
+          <p role="alert" className="clients-list-state">
             {query.error.message}{" "}
             <button onClick={() => void query.refetch()}>Retry</button>
           </p>
         ) : query.data.data.length === 0 ? (
-          <p className="empty">No clients found.</p>
+          <p className="empty clients-list-state">No clients found.</p>
         ) : (
-          <div className="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>CLIENT</th>
-                  <th>CONTACT</th>
-                  <th>TELEPHONE</th>
-                  <th>EMAIL</th>
-                  <th>PROJECTS</th>
-                  <th>ESTIMATES</th>
-                  <th>TOTALS</th>
-                  <th>STATUS</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {query.data.data.map((c) => (
-                  <tr key={c.id}>
-                    <td>{c.name}</td>
-                    <td>{c.contactPerson || "—"}</td>
-                    <td>{c.telephone || "—"}</td>
-                    <td>{c.email || "—"}</td>
-                    <td>{c.projectCount}</td>
-                    <td>{c.estimateCount}</td>
-                    <td>
-                      {Object.entries(c.totalsByCurrency).map(
+          <div className="clients-card-grid">
+            {query.data.data.map((c) => (
+              <Link
+                className="client-card"
+                key={c.id}
+                to={`/clients/${c.id}`}
+                aria-label={`View client ${c.name}`}
+              >
+                <div className="client-card-heading">
+                  <h2>{c.name}</h2>
+                  <div className="client-card-meta">
+                    <span className="client-card-number">
+                      {c.clientCode ?? "Number unavailable"}
+                    </span>
+                    <StatusBadge status={c.active ? "ACTIVE" : "INACTIVE"} />
+                  </div>
+                </div>
+                <div className="client-card-value">
+                  <span>Approved estimate value</span>
+                  <strong>
+                    {Object.entries(c.totalsByCurrency).length ? (
+                      Object.entries(c.totalsByCurrency).map(
                         ([currency, value]) => (
                           <span key={currency} className="currency-amount">
                             {money(value, currency)}
                           </span>
                         ),
-                      )}
-                    </td>
-                    <td>{c.active ? "Active" : "Inactive"}</td>
-                    <td>
-                      <Link to={`/clients/${c.id}`}>View</Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      )
+                    ) : (
+                      <span className="currency-amount">No approved estimates</span>
+                    )}
+                  </strong>
+                </div>
+                <div className="client-card-contact">
+                  <div>
+                    <span>Contact person</span>
+                    <strong>{c.contactPerson || "Not provided"}</strong>
+                  </div>
+                  <div>
+                    <span>Telephone</span>
+                    <strong>{c.telephone || "Not provided"}</strong>
+                  </div>
+                  {c.email && (
+                    <div>
+                      <span>Email</span>
+                      <strong>{c.email}</strong>
+                    </div>
+                  )}
+                </div>
+                <div className="client-card-footer">
+                  <div className="client-card-counts">
+                    <span><strong>{c.projectCount}</strong> projects</span>
+                    <span><strong>{c.estimateCount}</strong> estimates</span>
+                  </div>
+                  <span className="client-card-view">View Client <span aria-hidden="true">→</span></span>
+                </div>
+              </Link>
+            ))}
           </div>
         )}
-        <div className="pagination">
+        <div className="pagination clients-pagination">
           <span>
             {query.data?.total ?? 0} clients · Page {page}
           </span>

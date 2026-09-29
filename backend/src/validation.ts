@@ -24,10 +24,12 @@ export const itemSchema = z
     rate: z.number().nonnegative().max(10000000).multipleOf(0.01),
   })
   .strict();
+export const estimateDescriptionSchema = z.string().trim().min(1).max(150);
 export const estimateSchema = z
   .object({
     clientId: z.string().uuid(),
     projectId: z.string().uuid(),
+    description: estimateDescriptionSchema,
     estimateDate: z
       .string()
       .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -38,6 +40,7 @@ export const estimateSchema = z
         "Invalid estimate date",
       ),
     currency: z.enum(["LKR", "USD", "GBP", "EUR"]).default("LKR"),
+    markupPercent: z.number().min(0).max(100).multipleOf(0.01).default(0),
     taxPercent: z.number().min(0).max(100).multipleOf(0.01),
     notes: z.string().max(4000),
     items: z.array(itemSchema).min(1).max(100),
@@ -47,11 +50,15 @@ export type EstimateInput = z.infer<typeof estimateSchema>;
 export const projectEstimateSchema = estimateSchema.omit({
   clientId: true,
   projectId: true,
+}).extend({
+  copiedFromEstimateId: z.string().uuid().optional(),
 });
 export type ProjectEstimateInput = z.infer<typeof projectEstimateSchema>;
-export const updateSchema = estimateSchema.extend({
+export const updateSchema = estimateSchema.omit({ description: true }).extend({
+  description: estimateDescriptionSchema.optional(),
   version: z.number().int().positive(),
 });
+export type EstimateUpdateInput = Omit<z.infer<typeof updateSchema>, "version">;
 export const statusSchema = z
   .object({
     status: z.enum(["DRAFT", "SENT", "APPROVED", "REJECTED"]),
@@ -72,16 +79,12 @@ const calendarDate = (value: string) => {
     parsed.toISOString().slice(0, 10) === value
   );
 };
-const code = (limit: number) =>
-  optional(limit).transform((v) => v?.toUpperCase() ?? null);
 const email = z
   .union([z.string().trim().email().max(254), z.literal("")])
   .transform((v) => (v ? v.toLowerCase() : null));
 export const clientSchema = z
   .object({
     name: z.string().trim().min(1).max(160),
-    registrationNumber: code(80),
-    vatNumber: code(80),
     address: optional(500),
     contactPerson: optional(160),
     telephone: optional(40),
@@ -91,7 +94,6 @@ export const clientSchema = z
   .strict();
 export const projectSchema = z
   .object({
-    projectCode: code(80),
     projectName: z.string().trim().min(1).max(160),
     siteAddress: optional(500),
     description: optional(4000),
@@ -104,24 +106,8 @@ export const projectSchema = z
         z.literal(""),
       ])
       .transform((v) => v || null),
-    completionDate: z
-      .union([
-        z
-          .string()
-          .regex(/^\d{4}-\d{2}-\d{2}$/)
-          .refine(calendarDate),
-        z.literal(""),
-      ])
-      .transform((v) => v || null),
   })
-  .strict()
-  .refine(
-    (v) => !v.startDate || !v.completionDate || v.completionDate >= v.startDate,
-    {
-      path: ["completionDate"],
-      message: "Completion date precedes start date",
-    },
-  );
+  .strict();
 export const listSchema = z
   .object({
     search: z.string().trim().max(160).default(""),

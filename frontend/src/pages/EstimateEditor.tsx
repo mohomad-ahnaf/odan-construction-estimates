@@ -73,8 +73,10 @@ export function EstimateEditor() {
     );
   const initial: EstimateFields | undefined = existing
     ? {
+        description: existing.description ?? "",
         estimateDate: existing.estimateDate?.slice(0, 10) ?? "",
         currency: existing.currency,
+        markupPercent: existing.markupPercent,
         taxPercent: existing.taxPercent,
         notes: existing.notes,
         items: existing.items.map(({ description, unit, quantity, rate }) => ({
@@ -90,9 +92,7 @@ export function EstimateEditor() {
       <nav className="breadcrumbs" aria-label="Breadcrumb">
         <Link to="/clients">Clients</Link>
         <span>›</span>
-        <Link to={`/clients/${client.data.id}?tab=projects`}>
-          {client.data.name}
-        </Link>
+        <Link to={`/clients/${client.data.id}`}>{client.data.name}</Link>
         <span>›</span>
         <Link to={`/projects/${project.data.id}`}>
           {project.data.projectName}
@@ -110,7 +110,8 @@ export function EstimateEditor() {
       <EstimateForm
         context={{ client: client.data, project: project.data }}
         initial={initial}
-        onSave={async (values) => {
+        allowItemImport={!id}
+        onSave={async (values, copiedFromEstimateId) => {
           const saved = await api<Estimate>(
             id ? `/estimates/${id}` : `/projects/${project.data.id}/estimates`,
             {
@@ -123,7 +124,10 @@ export function EstimateEditor() {
                       projectId: existing!.projectId,
                       version: existing!.version,
                     }
-                  : values,
+                  : {
+                      ...values,
+                      ...(copiedFromEstimateId ? { copiedFromEstimateId } : {}),
+                    },
               ),
             },
           );

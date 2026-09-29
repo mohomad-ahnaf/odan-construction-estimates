@@ -1,17 +1,10 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { z } from "zod";
 import { db } from "../db.js";
+import { nextCode } from "../repositories/code.repository.js";
 
 const optionalText = (length: number) =>
   z.string().trim().min(1).max(length).optional();
-const optionalCode = (length: number) =>
-  z
-    .string()
-    .trim()
-    .min(1)
-    .max(length)
-    .transform((value) => value.toUpperCase())
-    .optional();
 const date = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -28,8 +21,6 @@ const newClient = z
   .object({
     key,
     name: z.string().trim().min(1).max(160),
-    registrationNumber: optionalCode(80),
-    vatNumber: optionalCode(80),
     address: optionalText(500),
     contactPerson: optionalText(160),
     telephone: optionalText(40),
@@ -48,25 +39,13 @@ const newProject = z
   .object({
     key,
     clientRef: ref,
-    projectCode: optionalCode(80),
     projectName: z.string().trim().min(1).max(160),
     siteAddress: optionalText(500),
     description: optionalText(4000),
     status: z.enum(["ACTIVE", "ARCHIVED"]).default("ACTIVE"),
     startDate: date.optional(),
-    completionDate: date.optional(),
   })
-  .strict()
-  .refine(
-    (value) =>
-      !value.startDate ||
-      !value.completionDate ||
-      value.completionDate >= value.startDate,
-    {
-      path: ["completionDate"],
-      message: "Completion date precedes start date",
-    },
-  );
+  .strict();
 const link = z
   .object({
     estimateId: z.string().uuid(),
@@ -87,24 +66,6 @@ export const reconciliationPlanSchema = z
       [value.newClients.map((item) => item.key), "client key"],
       [value.newProjects.map((item) => item.key), "project key"],
       [value.links.map((item) => item.estimateId), "estimate ID"],
-      [
-        value.newClients.flatMap((item) =>
-          item.registrationNumber ? [item.registrationNumber] : [],
-        ),
-        "registration number",
-      ],
-      [
-        value.newClients.flatMap((item) =>
-          item.vatNumber ? [item.vatNumber] : [],
-        ),
-        "VAT number",
-      ],
-      [
-        value.newProjects.flatMap((item) =>
-          item.projectCode ? [item.projectCode] : [],
-        ),
-        "project code",
-      ],
     ];
     for (const [values, label] of checks)
       if (new Set(values).size !== values.length)
@@ -174,37 +135,6 @@ async function validatePlan(
   for (const item of plan.newProjects)
     if (!projectRefs.has(`new:${item.key}`))
       throw new Error("Unreferenced new project");
-  for (const item of plan.newClients) {
-    if (
-      item.registrationNumber &&
-      (await tx.client.findFirst({
-        where: {
-          registrationNumber: {
-            equals: item.registrationNumber,
-            mode: "insensitive",
-          },
-        },
-      }))
-    )
-      throw new Error("Registration number already exists");
-    if (
-      item.vatNumber &&
-      (await tx.client.findFirst({
-        where: { vatNumber: { equals: item.vatNumber, mode: "insensitive" } },
-      }))
-    )
-      throw new Error("VAT number already exists");
-  }
-  for (const item of plan.newProjects)
-    if (
-      item.projectCode &&
-      (await tx.project.findFirst({
-        where: {
-          projectCode: { equals: item.projectCode, mode: "insensitive" },
-        },
-      }))
-    )
-      throw new Error("Project code already exists");
   for (const ref of clientRefs) {
     if (clients.has(ref)) continue;
     const parsed = reference(ref);
@@ -271,7 +201,9 @@ export async function applyReconciliation(plan: ReconciliationPlan) {
       const clientIds = new Map<string, string>();
       for (const item of plan.newClients) {
         const { key: localKey, ...data } = item;
-        const created = await tx.client.create({ data });
+        const created = await tx.client.create({
+          data: { ...data, clientCode: await nextCode(tx, "client") },
+        });
         clientIds.set(`new:${localKey}`, created.id);
         await tx.auditLog.create({
           data: {
@@ -284,22 +216,14 @@ export async function applyReconciliation(plan: ReconciliationPlan) {
         clientIds.get(value) ?? reference(value).id;
       const projectIds = new Map<string, string>();
       for (const item of plan.newProjects) {
-        const {
-          key: localKey,
-          clientRef,
-          startDate,
-          completionDate,
-          ...data
-        } = item;
+        const { key: localKey, clientRef, startDate, ...data } = item;
         const created = await tx.project.create({
           data: {
             ...data,
+            projectCode: await nextCode(tx, "project"),
             clientId: resolveClient(clientRef),
             startDate: startDate
               ? new Date(`${startDate}T00:00:00.000Z`)
-              : null,
-            completionDate: completionDate
-              ? new Date(`${completionDate}T00:00:00.000Z`)
               : null,
           },
         });

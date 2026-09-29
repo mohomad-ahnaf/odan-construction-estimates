@@ -13,6 +13,9 @@ import { ClientEditor } from "./pages/ClientEditor";
 import { ClientDetail } from "./pages/ClientDetail";
 import { ProjectEditor } from "./pages/ProjectEditor";
 import { ProjectDetail } from "./pages/ProjectDetail";
+import { ClientEstimateEditor } from "./pages/ClientEstimateEditor";
+import { ClientEstimateDetail } from "./pages/ClientEstimateDetail";
+import { PdfTemplateSettings } from "./pages/PdfTemplateSettings";
 export function App() {
   const { session, loading, error, refresh } = useAuth();
   if (loading)
@@ -50,12 +53,27 @@ export function App() {
               element={<ProjectEditor />}
             />
             <Route path="/projects/:id/edit" element={<ProjectEditor />} />
+            <Route
+              path="/projects/:projectId/client-estimates/new"
+              element={<ClientEstimateEditor />}
+            />
+            <Route
+              path="/client-estimates/:id/edit"
+              element={<ClientEstimateEditor />}
+            />
           </>
         )}
         <Route path="/estimates/:id" element={<EstimateDetail />} />
+        <Route
+          path="/client-estimates/:id"
+          element={<ClientEstimateDetail />}
+        />
         <Route path="/account/password" element={<ChangePassword />} />
         {session.user.role === "ADMIN" && (
-          <Route path="/audit" element={<Audit />} />
+          <>
+            <Route path="/audit" element={<Audit />} />
+            <Route path="/settings/pdf-template" element={<PdfTemplateSettings />} />
+          </>
         )}
         <Route
           path="*"

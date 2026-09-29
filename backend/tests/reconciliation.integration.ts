@@ -22,10 +22,7 @@ let existingProjectId = "";
 
 beforeAll(async () => {
   const existing = await db.client.create({
-    data: {
-      name: "Reconciliation fixture A",
-      registrationNumber: `REG-${randomUUID()}`,
-    },
+    data: { name: "Reconciliation fixture A" },
   });
   const other = await db.client.create({
     data: { name: "Reconciliation fixture B" },
@@ -178,6 +175,14 @@ describe("operator-assisted reconciliation", () => {
     });
     clientIds.push(after.clientId!);
     projectIds.push(after.projectId!);
+    expect(
+      (await db.client.findUniqueOrThrow({ where: { id: after.clientId! } }))
+        .clientCode,
+    ).toMatch(/^ODN-CLI-\d{4,}$/);
+    expect(
+      (await db.project.findUniqueOrThrow({ where: { id: after.projectId! } }))
+        .projectCode,
+    ).toMatch(/^ODN-PRJ-\d{4,}$/);
     expect(after.clientName).toBe(before.clientName);
     expect(after.clientEmail).toBe(before.clientEmail);
     expect(after.title).toBe(before.title);
@@ -229,16 +234,32 @@ describe("operator-assisted reconciliation", () => {
     ).rejects.toThrow();
   });
 
-  it("normalizes identifiers and rejects duplicates within a proposed plan", () => {
+  it("rejects duplicate keys and obsolete client fields in a proposed plan", () => {
     const plan = reconciliationPlanSchema.safeParse({
       newClients: [
-        { key: "one", name: "One", registrationNumber: " reg-123 " },
-        { key: "two", name: "Two", registrationNumber: "REG-123" },
+        { key: "same", name: "One" },
+        { key: "same", name: "Two" },
       ],
       newProjects: [],
       links: [],
     });
     expect(plan.success).toBe(false);
+    expect(
+      reconciliationPlanSchema.safeParse({
+        newClients: [
+          { key: "legacy", name: "Legacy", registrationNumber: "OLD" },
+        ],
+        newProjects: [],
+        links: [],
+      }).success,
+    ).toBe(false);
+    expect(
+      reconciliationPlanSchema.safeParse({
+        newClients: [{ key: "legacy", name: "Legacy", vatNumber: "OLD" }],
+        newProjects: [],
+        links: [],
+      }).success,
+    ).toBe(false);
     expect(
       reconciliationPlanSchema.safeParse({
         newClients: [],
@@ -255,27 +276,15 @@ describe("operator-assisted reconciliation", () => {
     ).toBe(false);
   });
 
-  it("supports deactivation and archival while enforcing unique identifiers", async () => {
-    const registrationNumber = (
-      await db.client.findUniqueOrThrow({ where: { id: existingClientId } })
-    ).registrationNumber!;
-    await expect(
-      db.client.create({
-        data: { name: "Duplicate fixture", registrationNumber },
-      }),
-    ).rejects.toThrow();
-    const vatNumber = `VAT-${randomUUID()}`;
+  it("supports deactivation and archival while enforcing unique project codes", async () => {
     await db.client.update({
       where: { id: otherClientId },
-      data: { active: false, vatNumber },
+      data: { active: false },
     });
     expect(
       (await db.client.findUniqueOrThrow({ where: { id: otherClientId } }))
         .active,
     ).toBe(false);
-    await expect(
-      db.client.create({ data: { name: "Duplicate VAT fixture", vatNumber } }),
-    ).rejects.toThrow();
     const projectCode = `PROJECT-${randomUUID()}`;
     await db.project.update({
       where: { id: existingProjectId },

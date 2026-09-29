@@ -5,8 +5,6 @@ import { z } from "zod";
 import type { ClientInput } from "../types";
 const schema = z.object({
   name: z.string().trim().min(1, "Client name is required").max(160),
-  registrationNumber: z.string().max(80),
-  vatNumber: z.string().max(80),
   address: z.string().max(500),
   contactPerson: z.string().max(160),
   telephone: z.string().max(40),
@@ -15,8 +13,6 @@ const schema = z.object({
 });
 const empty: ClientInput = {
   name: "",
-  registrationNumber: "",
-  vatNumber: "",
   address: "",
   contactPerson: "",
   telephone: "",
@@ -25,9 +21,11 @@ const empty: ClientInput = {
 };
 export function ClientForm({
   initial,
+  clientCode,
   onSave,
 }: {
   initial?: ClientInput;
+  clientCode?: string | null;
   onSave: (data: ClientInput) => Promise<void>;
 }) {
   const [error, setError] = useState("");
@@ -53,12 +51,17 @@ export function ClientForm({
       })}
     >
       <h2>Client information</h2>
+      <p className="muted">
+        Client Number:{" "}
+        <strong>
+          {clientCode ??
+            (initial ? "Legacy client (no number)" : "Generated when saved")}
+        </strong>
+      </p>
       <div className="form-grid">
         {(
           [
             ["name", "Client name"],
-            ["registrationNumber", "Registration number"],
-            ["vatNumber", "VAT number"],
             ["address", "Address"],
             ["contactPerson", "Contact person"],
             ["telephone", "Telephone"],

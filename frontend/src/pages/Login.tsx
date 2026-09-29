@@ -18,9 +18,11 @@ export function Login() {
   return (
     <div className="login-screen">
       <section className="login-story">
-        <div className="brand">
-          ODAN <small>CONSTRUCTION</small>
-        </div>
+        <img
+          className="login-logo"
+          src="/branding/odan-logo-navy.png"
+          alt="Odan Construction"
+        />
         <div>
           <span className="eyebrow">FROM FIRST MEASURE TO FINAL FIGURE</span>
           <h1>

@@ -3,6 +3,8 @@ import { rateLimit } from "express-rate-limit";
 import * as auth from "../controllers/auth.controller.js";
 import * as estimates from "../controllers/estimate.controller.js";
 import * as clients from "../controllers/client.controller.js";
+import * as clientEstimates from "../controllers/client-estimate.controller.js";
+import * as pdfTemplateSettings from "../controllers/pdf-template-settings.controller.js";
 import { requireAuth, allow } from "../middleware/auth.js";
 export const routes = Router();
 const authLimit = rateLimit({
@@ -31,6 +33,9 @@ routes.post("/auth/login", authLimit, auth.login);
 routes.post("/auth/logout", requireAuth, auth.logout);
 routes.use(requireAuth);
 routes.post("/auth/change-password", passwordLimit, auth.changePassword);
+routes.get("/settings/pdf-template", allow("ADMIN"), pdfTemplateSettings.get);
+routes.put("/settings/pdf-template", allow("ADMIN"), pdfTemplateSettings.update);
+routes.post("/settings/pdf-template/preview", allow("ADMIN"), exportLimit, pdfTemplateSettings.preview);
 routes.get("/dashboard", clients.dashboard);
 routes.get("/clients", clients.list);
 routes.post("/clients", allow("ADMIN", "ESTIMATOR"), clients.create);
@@ -56,6 +61,15 @@ routes.post(
   allow("ADMIN", "ESTIMATOR"),
   estimates.createForProject,
 );
+routes.get(
+  "/projects/:projectId/client-estimates",
+  clientEstimates.listForProject,
+);
+routes.post(
+  "/projects/:projectId/client-estimates",
+  allow("ADMIN", "ESTIMATOR"),
+  clientEstimates.create,
+);
 routes.put("/projects/:id", allow("ADMIN", "ESTIMATOR"), clients.updateProject);
 routes.patch(
   "/projects/:id/status",
@@ -72,4 +86,20 @@ routes.patch(
   estimates.status,
 );
 routes.get("/estimates/:id/export/:format", exportLimit, estimates.download);
+routes.get("/client-estimates/:id", clientEstimates.get);
+routes.put(
+  "/client-estimates/:id",
+  allow("ADMIN", "ESTIMATOR"),
+  clientEstimates.update,
+);
+routes.patch(
+  "/client-estimates/:id/status",
+  allow("ADMIN", "ESTIMATOR"),
+  clientEstimates.status,
+);
+routes.get(
+  "/client-estimates/:id/export/:format",
+  exportLimit,
+  clientEstimates.download,
+);
 routes.get("/audit", allow("ADMIN"), estimates.audit);

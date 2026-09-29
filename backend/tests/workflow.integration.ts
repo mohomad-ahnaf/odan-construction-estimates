@@ -24,6 +24,7 @@ const tokens: { admin: string; viewer: string; estimator: string } = {
 const input = {
   clientId: "",
   projectId: "",
+  description: "Integration estimate",
   estimateDate: "2026-09-27",
   currency: "LKR",
   taxPercent: 18,
@@ -69,8 +70,6 @@ beforeAll(async () => {
     .set("x-csrf-token", tokens.admin)
     .send({
       name: "Integration client",
-      registrationNumber: `INT-${randomUUID()}`,
-      vatNumber: "",
       address: "",
       contactPerson: "",
       telephone: "",
@@ -85,12 +84,10 @@ beforeAll(async () => {
     .set("Origin", config.ODAN_ORIGIN)
     .set("x-csrf-token", tokens.admin)
     .send({
-      projectCode: `PRJ-${randomUUID()}`,
       projectName: "Integration residence",
       siteAddress: "Test site",
       description: "",
       startDate: "",
-      completionDate: "",
     })
     .expect(201);
   projectIds.push(createdProject.body.id);
@@ -115,25 +112,21 @@ describe("real PostgreSQL HTTP workflow", () => {
       .set("Origin", config.ODAN_ORIGIN)
       .set("x-csrf-token", token)
       .send(data);
-  const clientBody = (name: string, code = "") => ({
+  const clientBody = (name: string) => ({
     name,
-    registrationNumber: code,
-    vatNumber: "",
     address: "",
     contactPerson: "",
     telephone: "",
     email: "",
     notes: "",
   });
-  const projectBody = (name: string, code = "") => ({
-    projectCode: code,
+  const projectBody = (name: string) => ({
     projectName: name,
     siteAddress: "",
     description: "",
     startDate: "",
-    completionDate: "",
   });
-  it("validates client identifiers, permissions and deactivation", async () => {
+  it("validates generated Client Numbers, permissions and deactivation", async () => {
     await write(
       viewer,
       tokens.viewer,
@@ -143,21 +136,34 @@ describe("real PostgreSQL HTTP workflow", () => {
     await write(admin, tokens.admin, "/api/clients", clientBody("")).expect(
       400,
     );
-    const code = `REG-${randomUUID()}`;
     const response = await write(
       estimator,
       tokens.estimator,
       "/api/clients",
-      clientBody("Another client", code),
+      clientBody("Another client"),
     ).expect(201);
     clientIds.push(response.body.id);
-    expect(response.body.registrationNumber).toBe(code.toUpperCase());
-    await write(
-      admin,
-      tokens.admin,
-      "/api/clients",
-      clientBody("Duplicate", code.toLowerCase()),
-    ).expect(409);
+    expect(response.body.clientCode).toMatch(/^ODN-CLI-\d{4,}$/);
+    expect(response.body).not.toHaveProperty("registrationNumber");
+    expect(response.body).not.toHaveProperty("vatNumber");
+    await write(admin, tokens.admin, "/api/clients", {
+      ...clientBody("Manual client code"),
+      clientCode: "CUSTOM",
+    }).expect(400);
+    await admin
+      .put(`/api/clients/${response.body.id}`)
+      .set("Origin", config.ODAN_ORIGIN)
+      .set("x-csrf-token", tokens.admin)
+      .send({ ...clientBody("Changed"), clientCode: "CUSTOM" })
+      .expect(400);
+    await write(admin, tokens.admin, "/api/clients", {
+      ...clientBody("Old registration"),
+      registrationNumber: "LEGACY",
+    }).expect(400);
+    await write(admin, tokens.admin, "/api/clients", {
+      ...clientBody("Old VAT"),
+      vatNumber: "LEGACY",
+    }).expect(400);
     await viewer.get(`/api/clients/${response.body.id}`).expect(200);
     await viewer.get(`/api/clients/${response.body.id}/activity`).expect(403);
     const project = await write(
@@ -183,6 +189,7 @@ describe("real PostgreSQL HTTP workflow", () => {
       tokens.admin,
       `/api/projects/${project.body.id}/estimates`,
       {
+        description: input.description,
         estimateDate: input.estimateDate,
         currency: input.currency,
         taxPercent: input.taxPercent,
@@ -197,7 +204,7 @@ describe("real PostgreSQL HTTP workflow", () => {
       projectBody("Blocked project"),
     ).expect(409);
   });
-  it("enforces project ownership and unique codes", async () => {
+  it("enforces project ownership and backend-generated immutable codes", async () => {
     const other = await write(
       admin,
       tokens.admin,
@@ -205,20 +212,32 @@ describe("real PostgreSQL HTTP workflow", () => {
       clientBody("Project owner"),
     ).expect(201);
     clientIds.push(other.body.id);
-    const code = `PROJ-${randomUUID()}`;
     const project = await write(
       estimator,
       tokens.estimator,
       `/api/clients/${other.body.id}/projects`,
-      projectBody("Owner project", code),
+      projectBody("Owner project"),
     ).expect(201);
     projectIds.push(project.body.id);
+    expect(project.body.projectCode).toMatch(/^ODN-PRJ-\d{4,}$/);
     await write(
       admin,
       tokens.admin,
       `/api/clients/${input.clientId}/projects`,
-      projectBody("Duplicate", code.toLowerCase()),
-    ).expect(409);
+      { ...projectBody("Manual code"), projectCode: project.body.projectCode },
+    ).expect(400);
+    await write(
+      admin,
+      tokens.admin,
+      `/api/clients/${input.clientId}/projects`,
+      { ...projectBody("Old completion field"), completionDate: "2026-12-31" },
+    ).expect(400);
+    await admin
+      .put(`/api/projects/${project.body.id}`)
+      .set("Origin", config.ODAN_ORIGIN)
+      .set("x-csrf-token", tokens.admin)
+      .send({ ...projectBody("Changed"), projectCode: "CUSTOM" })
+      .expect(400);
     await write(
       viewer,
       tokens.viewer,
@@ -245,6 +264,7 @@ describe("real PostgreSQL HTTP workflow", () => {
       tokens.admin,
       `/api/projects/${project.body.id}/estimates`,
       {
+        description: input.description,
         estimateDate: input.estimateDate,
         currency: input.currency,
         taxPercent: input.taxPercent,
@@ -269,6 +289,7 @@ describe("real PostgreSQL HTTP workflow", () => {
   });
   it("creates and lists estimates under one Project with immutable code snapshots", async () => {
     const payload = {
+      description: input.description,
       estimateDate: input.estimateDate,
       currency: input.currency,
       taxPercent: input.taxPercent,
@@ -299,9 +320,9 @@ describe("real PostgreSQL HTTP workflow", () => {
       db.client.findUniqueOrThrow({ where: { id: input.clientId } }),
       db.project.findUniqueOrThrow({ where: { id: input.projectId } }),
     ]);
-    expect(created.body.clientRegistrationNumberSnapshot).toBe(
-      client.registrationNumber,
-    );
+    expect(created.body.clientNumber).toBe(client.clientCode);
+    expect(created.body).not.toHaveProperty("clientRegistrationNumberSnapshot");
+    expect(created.body).not.toHaveProperty("clientVatNumberSnapshot");
     expect(created.body.projectCodeSnapshot).toBe(project.projectCode);
     const listing = await viewer
       .get(`/api/projects/${input.projectId}/estimates`)
@@ -311,8 +332,102 @@ describe("real PostgreSQL HTTP workflow", () => {
         (row: { id: string }) => row.id === created.body.id,
       ),
     ).toBe(true);
+    const draftOnly = await viewer
+      .get(
+        `/api/projects/${input.projectId}/estimates?search=${created.body.number}&status=DRAFT`,
+      )
+      .expect(200);
+    expect(draftOnly.body.data.map((row: { id: string }) => row.id)).toContain(
+      created.body.id,
+    );
+    const approvedOnly = await viewer
+      .get(`/api/projects/${input.projectId}/estimates?status=APPROVED`)
+      .expect(200);
+    expect(
+      approvedOnly.body.data.map((row: { id: string }) => row.id),
+    ).not.toContain(created.body.id);
     await viewer.get(`/api/projects/${randomUUID()}/estimates`).expect(404);
     await db.estimate.delete({ where: { id: created.body.id } });
+  });
+  it("copies project estimate items independently and audits both IDs", async () => {
+    const path = `/api/projects/${input.projectId}/estimates`;
+    const sourcePayload = {
+      description: "Original scope",
+      estimateDate: input.estimateDate,
+      currency: "LKR",
+      markupPercent: 0,
+      taxPercent: 0,
+      notes: "",
+      items: [
+        { description: "Concrete", unit: "m³", quantity: 2, rate: 100 },
+        { description: "Steel", unit: "kg", quantity: 3, rate: 50 },
+      ],
+    };
+    const source = await write(admin, tokens.admin, path, sourcePayload).expect(201);
+    estimateIds.push(source.body.id);
+    const copiedItems = source.body.items.map(
+      ({ description, unit, quantity, rate }: {
+        description: string; unit: string; quantity: number; rate: number;
+      }) => ({ description, unit, quantity, rate }),
+    );
+    const copyPayload = {
+      ...sourcePayload,
+      description: "New independent scope",
+      markupPercent: 10,
+      taxPercent: 5,
+      items: copiedItems,
+      copiedFromEstimateId: source.body.id,
+    };
+    await write(viewer, tokens.viewer, path, copyPayload).expect(403);
+    const otherProject = await write(
+      admin,
+      tokens.admin,
+      `/api/clients/${input.clientId}/projects`,
+      projectBody("Other project"),
+    ).expect(201);
+    projectIds.push(otherProject.body.id);
+    await write(
+      admin,
+      tokens.admin,
+      `/api/projects/${otherProject.body.id}/estimates`,
+      copyPayload,
+    ).expect(400);
+    await write(admin, tokens.admin, path, {
+      ...copyPayload,
+      copiedFromEstimateId: randomUUID(),
+    }).expect(400);
+    await write(admin, tokens.admin, path, {
+      ...copyPayload,
+      currency: "USD",
+    }).expect(400);
+    const copied = await write(estimator, tokens.estimator, path, copyPayload).expect(201);
+    estimateIds.push(copied.body.id);
+    expect(copied.body.id).not.toBe(source.body.id);
+    expect(copied.body.items.map(
+      ({ description, unit, quantity, rate }: {
+        description: string; unit: string; quantity: number; rate: number;
+      }) => ({ description, unit, quantity, rate }),
+    )).toEqual(copiedItems);
+    expect(copied.body.items.map((item: { id: string }) => item.id)).not.toEqual(
+      source.body.items.map((item: { id: string }) => item.id),
+    );
+    expect(copied.body.totals.baseSubtotal).toBe("350.00");
+    expect(copied.body.totals.markupAmount).toBe("35.00");
+    expect(copied.body.totals.tax).toBe("19.25");
+    expect(copied.body.totals.total).toBe("404.25");
+    const audit = await db.auditLog.findFirst({
+      where: { action: "ESTIMATE_ITEMS_COPIED", entityId: copied.body.id },
+    });
+    expect(audit?.metadata).toEqual({
+      sourceEstimateId: source.body.id,
+      newEstimateId: copied.body.id,
+    });
+    await db.estimateItem.update({
+      where: { id: source.body.items[0].id },
+      data: { description: "Changed original" },
+    });
+    const unchanged = await viewer.get(`/api/estimates/${copied.body.id}`).expect(200);
+    expect(unchanged.body.items[0].description).toBe("Concrete");
   });
   it("persists a draft and its audit record atomically", async () => {
     const result = await admin
@@ -322,6 +437,7 @@ describe("real PostgreSQL HTTP workflow", () => {
       .send(input)
       .expect(201);
     estimateIds.push(result.body.id);
+    expect(result.body.number).toMatch(/^ODN-EST-\d{4,}$/);
     expect(result.body.totals.total).toBe("2950.00");
     expect(
       await db.auditLog.count({
@@ -387,8 +503,58 @@ describe("real PostgreSQL HTTP workflow", () => {
     expect(
       clientPage.body.data.find(
         (row: { id: string }) => row.id === input.clientId,
-      ).totalsByCurrency.LKR,
-    ).toBe("2950.00");
+      ).totalsByCurrency,
+    ).toEqual({});
+  });
+  it("allocates unique codes across concurrent Client, Project and Estimate requests", async () => {
+    const createdClients = await Promise.all(
+      ["Concurrent A", "Concurrent B"].map((name) =>
+        write(admin, tokens.admin, "/api/clients", clientBody(name)).expect(
+          201,
+        ),
+      ),
+    );
+    clientIds.push(...createdClients.map((response) => response.body.id));
+    expect(
+      new Set(createdClients.map((response) => response.body.clientCode)).size,
+    ).toBe(2);
+    const createdProjects = await Promise.all(
+      ["Concurrent Project A", "Concurrent Project B"].map((name) =>
+        write(
+          admin,
+          tokens.admin,
+          `/api/clients/${createdClients[0].body.id}/projects`,
+          projectBody(name),
+        ).expect(201),
+      ),
+    );
+    projectIds.push(...createdProjects.map((response) => response.body.id));
+    expect(
+      new Set(createdProjects.map((response) => response.body.projectCode))
+        .size,
+    ).toBe(2);
+    const estimatePayload = {
+      description: input.description,
+      estimateDate: input.estimateDate,
+      currency: input.currency,
+      taxPercent: input.taxPercent,
+      notes: input.notes,
+      items: input.items,
+    };
+    const createdEstimates = await Promise.all(
+      [0, 1].map(() =>
+        write(
+          admin,
+          tokens.admin,
+          `/api/projects/${createdProjects[0].body.id}/estimates`,
+          estimatePayload,
+        ).expect(201),
+      ),
+    );
+    estimateIds.push(...createdEstimates.map((response) => response.body.id));
+    expect(
+      new Set(createdEstimates.map((response) => response.body.number)).size,
+    ).toBe(2);
   });
   it("keeps snapshots until a draft relationship changes", async () => {
     const id = estimateIds[0];
@@ -418,16 +584,18 @@ describe("real PostgreSQL HTTP workflow", () => {
     input.projectId = next.body.id;
   });
   it("rejects cross-Client Project mismatches and refreshes snapshots on a valid Draft move", async () => {
-    const targetClient = await write(admin, tokens.admin, "/api/clients", {
-      ...clientBody("Move target"),
-      registrationNumber: `MOVE-${randomUUID()}`,
-    }).expect(201);
+    const targetClient = await write(
+      admin,
+      tokens.admin,
+      "/api/clients",
+      clientBody("Move target"),
+    ).expect(201);
     clientIds.push(targetClient.body.id);
     const targetProject = await write(
       admin,
       tokens.admin,
       `/api/clients/${targetClient.body.id}/projects`,
-      projectBody("Target Project", `TARGET-${randomUUID()}`),
+      projectBody("Target Project"),
     ).expect(201);
     projectIds.push(targetProject.body.id);
     const source = await write(
@@ -459,9 +627,7 @@ describe("real PostgreSQL HTTP workflow", () => {
     expect(moved.body.projectId).toBe(targetProject.body.id);
     expect(moved.body.clientName).toBe("Move target");
     expect(moved.body.title).toBe("Target Project");
-    expect(moved.body.clientRegistrationNumberSnapshot).toBe(
-      targetClient.body.registrationNumber,
-    );
+    expect(moved.body.clientNumber).toBe(targetClient.body.clientCode);
     expect(moved.body.projectCodeSnapshot).toBe(targetProject.body.projectCode);
   });
   it("rejects a viewer mutation and audit access", async () => {
@@ -519,6 +685,8 @@ describe("real PostgreSQL HTTP workflow", () => {
       .set("x-csrf-token", tokens.admin)
       .send({ status: "APPROVED", version: 4 })
       .expect(200);
+    const approvedClient = await viewer.get(`/api/clients/${input.clientId}`).expect(200);
+    expect(approvedClient.body.totalsByCurrency.LKR).toBe("2950.00");
     await admin
       .put(url)
       .set("Origin", config.ODAN_ORIGIN)

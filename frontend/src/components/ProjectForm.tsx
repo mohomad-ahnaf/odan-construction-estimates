@@ -3,36 +3,28 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import type { ProjectInput } from "../types";
-const schema = z
-  .object({
-    projectCode: z.string().max(80),
-    projectName: z.string().trim().min(1, "Project name is required").max(160),
-    siteAddress: z.string().max(500),
-    description: z.string().max(4000),
-    startDate: z.string(),
-    completionDate: z.string(),
-  })
-  .refine(
-    (v) => !v.startDate || !v.completionDate || v.completionDate >= v.startDate,
-    {
-      path: ["completionDate"],
-      message: "Completion date precedes start date",
-    },
-  );
+const schema = z.object({
+  projectName: z.string().trim().min(1, "Project name is required").max(160),
+  siteAddress: z.string().max(500),
+  description: z.string().max(4000),
+  startDate: z.string(),
+});
 const empty: ProjectInput = {
-  projectCode: "",
   projectName: "",
   siteAddress: "",
   description: "",
   startDate: "",
-  completionDate: "",
 };
 export function ProjectForm({
   clientName,
+  clientNumber,
+  projectCode,
   initial,
   onSave,
 }: {
   clientName: string;
+  clientNumber?: string | null;
+  projectCode?: string | null;
   initial?: ProjectInput;
   onSave: (data: ProjectInput) => Promise<void>;
 }) {
@@ -61,12 +53,24 @@ export function ProjectForm({
       <h2>Project information</h2>
       <p>
         Client: <strong>{clientName}</strong>
+        {clientNumber && (
+          <>
+            {" "}
+            · Client Number: <strong>{clientNumber}</strong>
+          </>
+        )}
+      </p>
+      <p className="muted">
+        Project code:{" "}
+        <strong>
+          {projectCode ??
+            (initial ? "Legacy project (no code)" : "Generated when saved")}
+        </strong>
       </p>
       <div className="form-grid">
         {(
           [
             ["projectName", "Project name"],
-            ["projectCode", "Project code"],
             ["siteAddress", "Site address"],
           ] as const
         ).map(([field, label]) => (
@@ -81,13 +85,6 @@ export function ProjectForm({
         <label>
           Start date
           <input type="date" {...register("startDate")} />
-        </label>
-        <label>
-          Completion date
-          <input type="date" {...register("completionDate")} />
-          {errors.completionDate && (
-            <small role="alert">{errors.completionDate.message}</small>
-          )}
         </label>
       </div>
       <label>

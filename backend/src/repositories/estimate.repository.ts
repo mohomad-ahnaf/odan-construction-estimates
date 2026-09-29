@@ -1,9 +1,16 @@
 import { Prisma } from "@prisma/client";
 import { db } from "../db.js";
-import type { EstimateInput } from "../validation.js";
+import { itemSchema, type EstimateInput, type EstimateUpdateInput } from "../validation.js";
 import { AppError } from "../middleware/errors.js";
-const include = { items: { orderBy: { position: "asc" as const } } };
-const snapshot = async (tx: Prisma.TransactionClient, input: EstimateInput) => {
+import { nextCode } from "./code.repository.js";
+const include = {
+  items: { orderBy: { position: "asc" as const } },
+  client: { select: { clientCode: true, address: true } },
+};
+const snapshot = async (
+  tx: Prisma.TransactionClient,
+  input: EstimateUpdateInput,
+) => {
   const [client, project] = await Promise.all([
     tx.client.findUnique({ where: { id: input.clientId } }),
     tx.project.findUnique({ where: { id: input.projectId } }),
@@ -23,21 +30,20 @@ const snapshot = async (tx: Prisma.TransactionClient, input: EstimateInput) => {
     title: project.projectName,
     clientName: client.name,
     clientEmail: client.email,
-    clientRegistrationNumberSnapshot: client.registrationNumber,
-    clientVatNumberSnapshot: client.vatNumber,
     projectCodeSnapshot: project.projectCode,
     siteAddress: project.siteAddress ?? "",
   };
 };
-const dataFor = (input: EstimateInput) => ({
+const dataFor = (input: EstimateUpdateInput) => ({
   clientId: input.clientId,
   projectId: input.projectId,
   estimateDate: new Date(`${input.estimateDate}T00:00:00.000Z`),
   currency: input.currency,
+  markupPercent: input.markupPercent,
   taxPercent: input.taxPercent,
   notes: input.notes,
 });
-const itemsFor = (input: EstimateInput) =>
+const itemsFor = (input: EstimateUpdateInput) =>
   input.items.map((item, position) => ({ ...item, position }));
 export const estimateRepository = {
   project: (id: string) =>
@@ -45,12 +51,19 @@ export const estimateRepository = {
       where: { id },
       select: { id: true, clientId: true },
     }),
-  listForProject: (projectId: string, search: string, page: number) => {
+  listForProject: (
+    projectId: string,
+    search: string,
+    page: number,
+    status?: "DRAFT" | "SENT" | "APPROVED" | "REJECTED",
+  ) => {
     const where: Prisma.EstimateWhereInput = {
       projectId,
+      ...(status ? { status } : {}),
       OR: [
         { number: { contains: search, mode: "insensitive" } },
         { title: { contains: search, mode: "insensitive" } },
+        { description: { contains: search, mode: "insensitive" } },
       ],
     };
     return db.$transaction([
@@ -70,6 +83,7 @@ export const estimateRepository = {
         where: {
           OR: [
             { title: { contains: search, mode: "insensitive" } },
+            { description: { contains: search, mode: "insensitive" } },
             { clientName: { contains: search, mode: "insensitive" } },
             { number: { contains: search, mode: "insensitive" } },
           ],
@@ -83,6 +97,7 @@ export const estimateRepository = {
         where: {
           OR: [
             { title: { contains: search, mode: "insensitive" } },
+            { description: { contains: search, mode: "insensitive" } },
             { clientName: { contains: search, mode: "insensitive" } },
             { number: { contains: search, mode: "insensitive" } },
           ],
@@ -90,14 +105,41 @@ export const estimateRepository = {
       }),
     ]),
   get: (id: string) => db.estimate.findUnique({ where: { id }, include }),
-  create: (input: EstimateInput, number: string, actorId: string) =>
+  create: (input: EstimateInput, actorId: string, copiedFromEstimateId?: string) =>
     db.$transaction(async (tx) => {
       const names = await snapshot(tx, input);
+      if (copiedFromEstimateId) {
+        const source = await tx.estimate.findUnique({
+          where: { id: copiedFromEstimateId },
+          select: {
+            clientId: true,
+            projectId: true,
+            currency: true,
+            items: { select: { description: true, unit: true, quantity: true, rate: true } },
+          },
+        });
+        if (
+          !source ||
+          source.projectId !== input.projectId ||
+          source.clientId !== input.clientId ||
+          source.currency !== input.currency ||
+          !itemSchema.array().min(1).max(100).safeParse(
+            source.items.map((item) => ({
+              description: item.description,
+              unit: item.unit,
+              quantity: Number(item.quantity),
+              rate: Number(item.rate),
+            })),
+          ).success
+        )
+          throw new AppError(400, "Selected source estimate is unavailable for this Project or currency");
+      }
       const estimate = await tx.estimate.create({
         data: {
           ...dataFor(input),
+          description: input.description,
           ...names,
-          number,
+          number: await nextCode(tx, "estimate"),
           items: { create: itemsFor(input) },
         },
         include,
@@ -105,11 +147,24 @@ export const estimateRepository = {
       await tx.auditLog.create({
         data: { actorId, action: "ESTIMATE_CREATED", entityId: estimate.id },
       });
+      if (copiedFromEstimateId) {
+        await tx.auditLog.create({
+          data: {
+            actorId,
+            action: "ESTIMATE_ITEMS_COPIED",
+            entityId: estimate.id,
+            metadata: {
+              sourceEstimateId: copiedFromEstimateId,
+              newEstimateId: estimate.id,
+            },
+          },
+        });
+      }
       return estimate;
     }),
   update: (
     id: string,
-    input: EstimateInput,
+    input: EstimateUpdateInput,
     version: number,
     actorId: string,
   ) =>
@@ -128,6 +183,9 @@ export const estimateRepository = {
         where: { id, version, status: "DRAFT" },
         data: {
           ...dataFor(input),
+          ...(input.description !== undefined
+            ? { description: input.description }
+            : {}),
           ...names,
           version: { increment: 1 },
         },

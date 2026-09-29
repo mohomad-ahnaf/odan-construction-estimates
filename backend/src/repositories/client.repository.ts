@@ -4,6 +4,7 @@ import { totals } from "../services/totals.js";
 import type { z } from "zod";
 import type { clientSchema, listSchema, projectSchema } from "../validation.js";
 import { AppError } from "../middleware/errors.js";
+import { nextCode } from "./code.repository.js";
 
 type ClientInput = z.infer<typeof clientSchema>;
 type ProjectInput = z.infer<typeof projectSchema>;
@@ -11,6 +12,7 @@ type ListInput = z.infer<typeof listSchema>;
 const sumByCurrency = (
   estimates: {
     currency: string;
+    markupPercent: Prisma.Decimal;
     taxPercent: Prisma.Decimal;
     items: { quantity: Prisma.Decimal; rate: Prisma.Decimal }[];
   }[],
@@ -19,7 +21,9 @@ const sumByCurrency = (
   for (const estimate of estimates)
     values[estimate.currency] = (
       values[estimate.currency] ?? new Prisma.Decimal(0)
-    ).add(totals(estimate.items, estimate.taxPercent).total);
+    ).add(
+      totals(estimate.items, estimate.taxPercent, estimate.markupPercent).total,
+    );
   return Object.fromEntries(
     Object.entries(values).map(([currency, value]) => [
       currency,
@@ -29,12 +33,21 @@ const sumByCurrency = (
 };
 const moneySelect = {
   currency: true,
+  markupPercent: true,
   taxPercent: true,
   items: { select: { quantity: true, rate: true } },
 } as const;
 const clientInclude = {
   _count: { select: { projects: true, estimates: true } },
-  estimates: { select: moneySelect },
+  estimates: { where: { status: "APPROVED" as const }, select: moneySelect },
+} as const;
+const projectCardInclude = {
+  _count: { select: { estimates: true } },
+  estimates: {
+    select: moneySelect,
+    orderBy: { updatedAt: "desc" as const },
+    take: 1,
+  },
 } as const;
 const present = <T>(row: T | null): T => {
   if (!row) throw new AppError(404, "Record not found");
@@ -43,7 +56,9 @@ const present = <T>(row: T | null): T => {
 function cleanClient(
   row: Prisma.ClientGetPayload<{ include: typeof clientInclude }>,
 ) {
-  const { estimates, _count, ...client } = row;
+  const { estimates, _count, registrationNumber, vatNumber, ...client } = row;
+  void registrationNumber;
+  void vatNumber;
   return {
     ...client,
     projectCount: _count.projects,
@@ -59,46 +74,24 @@ function uniqueError(error: unknown): never {
     throw new AppError(409, "Identifier already in use");
   throw error;
 }
-async function uniqueClient(input: ClientInput, id?: string) {
-  for (const field of ["registrationNumber", "vatNumber"] as const)
-    if (input[field]) {
-      const found = await db.client.findFirst({
-        where: {
-          id: { not: id },
-          [field]: { equals: input[field]!, mode: "insensitive" },
-        },
-        select: { id: true },
-      });
-      if (found) throw new AppError(409, "Identifier already in use");
-    }
-}
-async function uniqueProject(input: ProjectInput, id?: string) {
-  if (
-    input.projectCode &&
-    (await db.project.findFirst({
-      where: {
-        id: { not: id },
-        projectCode: { equals: input.projectCode, mode: "insensitive" },
-      },
-      select: { id: true },
-    }))
-  )
-    throw new AppError(409, "Identifier already in use");
-}
 const date = (value: string | null) =>
   value ? new Date(`${value}T00:00:00.000Z`) : null;
 const projectData = (input: ProjectInput) => ({
-  ...input,
+  projectName: input.projectName,
+  siteAddress: input.siteAddress,
+  description: input.description,
   startDate: date(input.startDate),
-  completionDate: date(input.completionDate),
 });
 const projectOutput = (
   project: NonNullable<Awaited<ReturnType<typeof db.project.findUnique>>>,
-) => ({
-  ...project,
-  startDate: project.startDate?.toISOString().slice(0, 10) ?? null,
-  completionDate: project.completionDate?.toISOString().slice(0, 10) ?? null,
-});
+) => {
+  const { completionDate, ...visible } = project;
+  void completionDate;
+  return {
+    ...visible,
+    startDate: project.startDate?.toISOString().slice(0, 10) ?? null,
+  };
+};
 export const clientRepository = {
   async list(query: ListInput) {
     const where: Prisma.ClientWhereInput = {
@@ -108,12 +101,7 @@ export const clientRepository = {
           OR: [
             { name: { contains: query.search, mode: "insensitive" } },
             { contactPerson: { contains: query.search, mode: "insensitive" } },
-            {
-              registrationNumber: {
-                contains: query.search,
-                mode: "insensitive",
-              },
-            },
+            { clientCode: { contains: query.search, mode: "insensitive" } },
           ],
         },
       ],
@@ -143,10 +131,11 @@ export const clientRepository = {
     );
   },
   async create(input: ClientInput, actorId: string) {
-    await uniqueClient(input);
     try {
       const row = await db.$transaction(async (tx) => {
-        const created = await tx.client.create({ data: input });
+        const created = await tx.client.create({
+          data: { ...input, clientCode: await nextCode(tx, "client") },
+        });
         await tx.auditLog.create({
           data: { actorId, action: "CLIENT_CREATED", entityId: created.id },
         });
@@ -159,7 +148,6 @@ export const clientRepository = {
   },
   async update(id: string, input: ClientInput, actorId: string) {
     await this.get(id);
-    await uniqueClient(input, id);
     try {
       await db.$transaction(async (tx) => {
         await tx.client.update({ where: { id }, data: input });
@@ -201,6 +189,7 @@ export const clientRepository = {
     const [rows, total] = await db.$transaction([
       db.project.findMany({
         where,
+        include: projectCardInclude,
         orderBy: [
           {
             [query.sort === "name" ? "projectName" : "createdAt"]:
@@ -214,7 +203,20 @@ export const clientRepository = {
       db.project.count({ where }),
     ]);
     return {
-      data: rows.map(projectOutput),
+      data: rows.map(({ _count, estimates, ...project }) => ({
+        ...projectOutput(project),
+        estimateCount: _count.estimates,
+        latestEstimateValue: estimates[0]
+          ? {
+              currency: estimates[0].currency,
+              total: totals(
+                estimates[0].items,
+                estimates[0].taxPercent,
+                estimates[0].markupPercent,
+              ).total,
+            }
+          : null,
+      })),
       total,
       page: query.page,
       pageSize: query.pageSize,
@@ -232,7 +234,7 @@ export const clientRepository = {
     const [rows, total] = await db.$transaction([
       db.estimate.findMany({
         where,
-        include: { items: true },
+        include: { items: true, client: { select: { clientCode: true } } },
         orderBy: [
           { [query.sort === "name" ? "title" : "createdAt"]: query.direction },
           { id: "asc" },
@@ -243,16 +245,25 @@ export const clientRepository = {
       db.estimate.count({ where }),
     ]);
     return {
-      data: rows.map((row) => ({
-        ...row,
-        taxPercent: Number(row.taxPercent),
-        items: row.items.map((item) => ({
-          ...item,
-          quantity: Number(item.quantity),
-          rate: Number(item.rate),
-        })),
-        totals: totals(row.items, row.taxPercent),
-      })),
+      data: rows.map(
+        ({
+          client,
+          clientRegistrationNumberSnapshot,
+          clientVatNumberSnapshot,
+          ...row
+        }) => ({
+          ...row,
+          clientNumber: client?.clientCode ?? null,
+          markupPercent: Number(row.markupPercent),
+          taxPercent: Number(row.taxPercent),
+          items: row.items.map((item) => ({
+            ...item,
+            quantity: Number(item.quantity),
+            rate: Number(item.rate),
+          })),
+          totals: totals(row.items, row.taxPercent, row.markupPercent),
+        }),
+      ),
       total,
       page: query.page,
       pageSize: query.pageSize,
@@ -296,11 +307,14 @@ export const clientRepository = {
   async createProject(clientId: string, input: ProjectInput, actorId: string) {
     const client = await this.get(clientId);
     if (!client.active) throw new AppError(409, "Client is inactive");
-    await uniqueProject(input);
     try {
       const row = await db.$transaction(async (tx) => {
         const created = await tx.project.create({
-          data: { ...projectData(input), clientId },
+          data: {
+            ...projectData(input),
+            clientId,
+            projectCode: await nextCode(tx, "project"),
+          },
         });
         await tx.auditLog.create({
           data: { actorId, action: "PROJECT_CREATED", entityId: created.id },
@@ -319,7 +333,6 @@ export const clientRepository = {
   },
   async updateProject(id: string, input: ProjectInput, actorId: string) {
     const project = await this.getProject(id);
-    await uniqueProject(input, id);
     try {
       await db.$transaction(async (tx) => {
         await tx.project.update({ where: { id }, data: projectData(input) });
@@ -377,13 +390,14 @@ export const clientRepository = {
       recentEstimates: recent.map((row) => ({
         id: row.id,
         number: row.number,
+        description: row.description,
         clientName: row.clientName,
         projectTitle: row.title,
         estimateDate: row.estimateDate,
         createdAt: row.createdAt,
         status: row.status,
         currency: row.currency,
-        grandTotal: totals(row.items, row.taxPercent).total,
+        grandTotal: totals(row.items, row.taxPercent, row.markupPercent).total,
       })),
     };
   },
