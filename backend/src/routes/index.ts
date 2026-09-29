@@ -92,6 +92,14 @@ routes.patch(
 routes.get("/estimates", estimates.list);
 routes.get("/documents/:id", allow("ADMIN"), documents.get);
 routes.get("/documents/:id/versions", allow("ADMIN"), documents.versions);
+routes.get(
+  "/documents/:id/approval-history",
+  allow("ADMIN"),
+  documents.approvalHistory,
+);
+routes.post("/documents/:id/submit", allow("ADMIN"), documents.submit);
+routes.post("/documents/:id/approve", allow("ADMIN"), documents.approve);
+routes.post("/documents/:id/reject", allow("ADMIN"), documents.reject);
 routes.post(
   "/documents/:id/revision",
   allow("ADMIN"),

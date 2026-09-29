@@ -2,6 +2,8 @@ import type { RequestHandler } from "express";
 import { z } from "zod";
 import {
   documentCategorySchema,
+  approvalCommentSchema,
+  rejectionCommentSchema,
   revisionNoteSchema,
 } from "../document.validation.js";
 import { AppError } from "../middleware/errors.js";
@@ -47,6 +49,45 @@ export const revision: RequestHandler = async (req, res) => {
       req.user!.id,
       revisionNoteSchema.parse(req.body.revisionNote),
     ),
+  );
+};
+
+export const submit: RequestHandler = async (req, res) => {
+  const { comment } = approvalCommentSchema.parse(req.body);
+  res.json(
+    await documentService.submitDocument(
+      id(req.params.id),
+      req.user!.id,
+      comment ?? null,
+    ),
+  );
+};
+
+export const approve: RequestHandler = async (req, res) => {
+  const { comment } = approvalCommentSchema.parse(req.body);
+  res.json(
+    await documentService.approveDocument(
+      id(req.params.id),
+      req.user!.id,
+      comment ?? null,
+    ),
+  );
+};
+
+export const reject: RequestHandler = async (req, res) => {
+  const { comment } = rejectionCommentSchema.parse(req.body);
+  res.json(
+    await documentService.rejectDocument(
+      id(req.params.id),
+      req.user!.id,
+      comment,
+    ),
+  );
+};
+
+export const approvalHistory: RequestHandler = async (req, res) => {
+  res.json(
+    await documentService.getDocumentApprovalHistory(id(req.params.id)),
   );
 };
 

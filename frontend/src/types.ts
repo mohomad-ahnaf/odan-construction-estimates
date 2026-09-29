@@ -134,6 +134,12 @@ export type DocumentCategory =
   | "BOQ"
   | "REPORTS"
   | "OTHER";
+export type DocumentStatus =
+  | "DRAFT"
+  | "PENDING_REVIEW"
+  | "APPROVED"
+  | "REJECTED"
+  | "ARCHIVED";
 export type ProjectDocument = {
   id: string;
   projectId: string;
@@ -148,10 +154,20 @@ export type ProjectDocument = {
   revisionNote: string | null;
   isLatest: boolean;
   versionGroupId: string;
+  status: DocumentStatus;
   createdAt: string;
   updatedAt: string;
   links: { viewUrl: string; downloadUrl: string };
   uploader: { id: string; name: string; email: string };
+};
+export type DocumentApproval = {
+  id: string;
+  documentId: string;
+  action: "SUBMITTED" | "APPROVED" | "REJECTED";
+  comment: string | null;
+  approvedBy: string;
+  createdAt: string;
+  approver: { id: string; name: string };
 };
 export type Dashboard = {
   activeProjects: number;

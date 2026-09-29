@@ -1,7 +1,12 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
-import type { DocumentCategory, ProjectDocument } from "../types";
+import type {
+  DocumentApproval,
+  DocumentCategory,
+  DocumentStatus,
+  ProjectDocument,
+} from "../types";
 
 const categories: DocumentCategory[] = [
   "DRAWINGS",
@@ -35,6 +40,13 @@ function categoryLabel(category: DocumentCategory) {
     : `${category.charAt(0)}${category.slice(1).toLowerCase()}`;
 }
 
+function statusLabel(status: DocumentStatus) {
+  return status
+    .split("_")
+    .map((part) => `${part.charAt(0)}${part.slice(1).toLowerCase()}`)
+    .join(" ");
+}
+
 function validateFile(file: File) {
   const name = file.name.toLowerCase();
   if (!allowedExtensions.some((extension) => name.endsWith(extension)))
@@ -58,6 +70,11 @@ export function ProjectDocuments({ projectId }: { projectId: string }) {
   const [revisionFile, setRevisionFile] = useState<File | null>(null);
   const [newRevisionNote, setNewRevisionNote] = useState("");
   const [revisionError, setRevisionError] = useState("");
+  const [approvalHistoryTarget, setApprovalHistoryTarget] =
+    useState<ProjectDocument | null>(null);
+  const [rejectTarget, setRejectTarget] = useState<ProjectDocument | null>(null);
+  const [rejectionComment, setRejectionComment] = useState("");
+  const [approvalError, setApprovalError] = useState("");
 
   const documents = useQuery({
     queryKey: ["project-documents", projectId],
@@ -133,6 +150,47 @@ export function ProjectDocuments({ projectId }: { projectId: string }) {
       await cache.invalidateQueries({
         queryKey: ["project-documents", projectId],
       });
+    },
+  });
+  const approvalHistory = useQuery({
+    queryKey: ["document-approval-history", approvalHistoryTarget?.id],
+    queryFn: () =>
+      api<DocumentApproval[]>(
+        `/documents/${approvalHistoryTarget!.id}/approval-history`,
+      ),
+    enabled: !!approvalHistoryTarget,
+  });
+  const workflow = useMutation({
+    mutationFn: ({
+      document,
+      action,
+      comment,
+    }: {
+      document: ProjectDocument;
+      action: "submit" | "approve" | "reject";
+      comment?: string;
+    }) =>
+      api<ProjectDocument>(`/documents/${document.id}/${action}`, {
+        method: "POST",
+        body: JSON.stringify(comment ? { comment } : {}),
+      }),
+    onSuccess: async (updated) => {
+      cache.setQueryData<ProjectDocument[]>(
+        ["project-documents", projectId],
+        (current) =>
+          current?.map((document) =>
+            document.id === updated.id ? updated : document,
+          ),
+      );
+      setRejectTarget(null);
+      setRejectionComment("");
+      setApprovalError("");
+      await Promise.all([
+        cache.invalidateQueries({ queryKey: ["project-documents", projectId] }),
+        cache.invalidateQueries({
+          queryKey: ["document-approval-history", updated.id],
+        }),
+      ]);
     },
   });
   const visible = useMemo(
@@ -231,6 +289,11 @@ export function ProjectDocuments({ projectId }: { projectId: string }) {
                         <span className="latest-version-badge">Latest</span>
                       )}
                       <span className="document-version">V{document.version}</span>
+                      <span
+                        className={`document-status document-status-${document.status.toLowerCase()}`}
+                      >
+                        {statusLabel(document.status)}
+                      </span>
                       <span className="document-category">
                         {categoryLabel(document.category)}
                       </span>
@@ -271,9 +334,52 @@ export function ProjectDocuments({ projectId }: { projectId: string }) {
                     >
                       Upload New Revision
                     </button>
-                    <button className="text-button document-delete" onClick={() => setDeleteTarget(document)}>
-                      Delete
+                    <button
+                      className="text-button"
+                      onClick={() => setApprovalHistoryTarget(document)}
+                    >
+                      Approval History
                     </button>
+                    {document.status === "DRAFT" && (
+                      <button
+                        className="text-button document-workflow-action"
+                        disabled={workflow.isPending}
+                        onClick={() =>
+                          workflow.mutate({ document, action: "submit" })
+                        }
+                      >
+                        Submit for Review
+                      </button>
+                    )}
+                    {document.status === "PENDING_REVIEW" && (
+                      <>
+                        <button
+                          className="text-button document-workflow-action"
+                          disabled={workflow.isPending}
+                          onClick={() =>
+                            workflow.mutate({ document, action: "approve" })
+                          }
+                        >
+                          Approve
+                        </button>
+                        <button
+                          className="text-button document-reject"
+                          onClick={() => {
+                            setRejectTarget(document);
+                            setRejectionComment("");
+                            setApprovalError("");
+                            workflow.reset();
+                          }}
+                        >
+                          Reject
+                        </button>
+                      </>
+                    )}
+                    {document.status !== "APPROVED" && (
+                      <button className="text-button document-delete" onClick={() => setDeleteTarget(document)}>
+                        Delete
+                      </button>
+                    )}
                   </div>
                 </div>
               </article>
@@ -431,6 +537,83 @@ export function ProjectDocuments({ projectId }: { projectId: string }) {
                 {remove.isPending ? "Deleting…" : "Delete Document"}
               </button>
             </div>
+          </section>
+        </div>
+      )}
+
+      {rejectTarget && (
+        <div className="modal-backdrop" role="presentation">
+          <section className="modal-card modal-card-small" role="dialog" aria-modal="true" aria-labelledby="reject-document-title">
+            <h2 id="reject-document-title">Reject Document</h2>
+            <p><strong>{rejectTarget.fileName}</strong> will return with a required review comment.</p>
+            <label className="modal-field">
+              Rejection comment
+              <textarea
+                rows={4}
+                maxLength={1000}
+                value={rejectionComment}
+                onChange={(event) => {
+                  setRejectionComment(event.target.value);
+                  setApprovalError("");
+                }}
+                placeholder="Explain what must be corrected"
+              />
+            </label>
+            {(approvalError || workflow.error) && <p className="error" role="alert">{approvalError || workflow.error?.message}</p>}
+            <div className="modal-actions">
+              <button onClick={() => setRejectTarget(null)}>Cancel</button>
+              <button
+                className="danger"
+                disabled={workflow.isPending}
+                onClick={() => {
+                  const comment = rejectionComment.trim();
+                  if (!comment) {
+                    setApprovalError("A rejection comment is required.");
+                    return;
+                  }
+                  workflow.mutate({ document: rejectTarget, action: "reject", comment });
+                }}
+              >
+                {workflow.isPending ? "Rejecting…" : "Reject Document"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {approvalHistoryTarget && (
+        <div className="modal-backdrop" role="presentation">
+          <section className="modal-card document-history-modal" role="dialog" aria-modal="true" aria-labelledby="approval-history-title">
+            <div className="modal-heading">
+              <div>
+                <span className="eyebrow">APPROVAL WORKFLOW</span>
+                <h2 id="approval-history-title">Approval History</h2>
+                <p className="muted">{approvalHistoryTarget.fileName}</p>
+              </div>
+              <button aria-label="Close approval history" onClick={() => setApprovalHistoryTarget(null)}>×</button>
+            </div>
+            {approvalHistory.isPending ? (
+              <p className="empty">Loading approval history…</p>
+            ) : approvalHistory.isError ? (
+              <p className="error" role="alert">{approvalHistory.error.message}</p>
+            ) : approvalHistory.data.length === 0 ? (
+              <p className="empty">No approval actions recorded yet.</p>
+            ) : (
+              <div className="version-history-list">
+                {approvalHistory.data.map((entry) => (
+                  <article className="version-history-item" key={entry.id}>
+                    <div>
+                      <strong>{statusLabel(entry.action === "SUBMITTED" ? "PENDING_REVIEW" : entry.action)}</strong>
+                      <p>{entry.comment || "No comment"}</p>
+                    </div>
+                    <div className="version-history-meta">
+                      <span>{new Date(entry.createdAt).toLocaleDateString("en-GB")}</span>
+                      <span>{entry.approver.name}</span>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
           </section>
         </div>
       )}

@@ -34,6 +34,20 @@ enum DocumentCategory {
   OTHER
 }
 
+enum DocumentStatus {
+  DRAFT
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  ARCHIVED
+}
+
+enum DocumentApprovalAction {
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
 model User {
   id           String    @id @default(uuid())
   email        String    @unique
@@ -43,6 +57,7 @@ model User {
   sessions     Session[]
   clientEstimates ClientEstimate[]
   documents    Document[]
+  documentApprovals DocumentApproval[]
   createdAt    DateTime  @default(now())
 }
 
@@ -249,6 +264,8 @@ model Document {
   revisionNote        String?
   isLatest            Boolean          @default(true)
   versionGroupId      String
+  status              DocumentStatus   @default(DRAFT)
+  approvals           DocumentApproval[]
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
 
@@ -256,4 +273,18 @@ model Document {
   @@index([projectId, isLatest, createdAt])
   @@index([uploadedBy])
   @@unique([versionGroupId, version])
+}
+
+model DocumentApproval {
+  id         String                 @id @default(uuid())
+  documentId String
+  document   Document               @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  action     DocumentApprovalAction
+  comment    String?
+  approvedBy String
+  approver   User                   @relation(fields: [approvedBy], references: [id], onDelete: Restrict)
+  createdAt  DateTime               @default(now())
+
+  @@index([documentId, createdAt])
+  @@index([approvedBy])
 }

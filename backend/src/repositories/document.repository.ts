@@ -1,5 +1,10 @@
-import type { DocumentCategory } from "@prisma/client";
+import type {
+  DocumentApprovalAction,
+  DocumentCategory,
+  DocumentStatus,
+} from "@prisma/client";
 import { db } from "../db.js";
+import { AppError } from "../middleware/errors.js";
 
 const documentInclude = {
   uploader: { select: { id: true, name: true, email: true } },
@@ -56,6 +61,47 @@ export const documentRepository = {
       where: { versionGroupId },
       include: documentInclude,
       orderBy: { version: "desc" },
+    });
+  },
+  approvalHistory(documentId: string) {
+    return db.documentApproval.findMany({
+      where: { documentId },
+      include: {
+        approver: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+  },
+  async transition(
+    id: string,
+    actorId: string,
+    expected: DocumentStatus,
+    status: DocumentStatus,
+    action: DocumentApprovalAction,
+    comment: string | null,
+  ) {
+    return db.$transaction(async (tx) => {
+      const changed = await tx.document.updateMany({
+        where: { id, status: expected, isLatest: true },
+        data: { status },
+      });
+      if (changed.count !== 1)
+        throw new AppError(409, "Document approval state has changed");
+      await tx.documentApproval.create({
+        data: { documentId: id, action, comment, approvedBy: actorId },
+      });
+      await tx.auditLog.create({
+        data: {
+          actorId,
+          action: `DOCUMENT_${action}`,
+          entityId: id,
+          metadata: { status },
+        },
+      });
+      return tx.document.findUniqueOrThrow({
+        where: { id },
+        include: documentInclude,
+      });
     });
   },
   async createInitial(input: DocumentWrite) {

@@ -8,6 +8,8 @@ const mocks = vi.hoisted(() => ({
   findLatestByCombination: vi.fn(),
   createInitial: vi.fn(),
   createRevision: vi.fn(),
+  transition: vi.fn(),
+  approvalHistory: vi.fn(),
   remove: vi.fn(),
   getAuthenticatedDriveClient: vi.fn(),
   ensureProjectDriveFolders: vi.fn(),
@@ -25,6 +27,8 @@ vi.mock("../repositories/document.repository.js", () => ({
     findLatestByCombination: mocks.findLatestByCombination,
     createInitial: mocks.createInitial,
     createRevision: mocks.createRevision,
+    transition: mocks.transition,
+    approvalHistory: mocks.approvalHistory,
     remove: mocks.remove,
   },
 }));
@@ -42,7 +46,11 @@ vi.mock("./google-drive.service.js", () => ({
 }));
 
 import {
+  approveDocument,
+  deleteDocument,
   getDocumentVersions,
+  rejectDocument,
+  submitDocument,
   uploadDocumentRevision,
   uploadProjectDocument,
   validateDocumentFile,
@@ -94,6 +102,13 @@ describe("project document service", () => {
       versionGroupId: "group-1",
     }));
     mocks.deleteDriveFile.mockResolvedValue(true);
+    mocks.transition.mockImplementation(
+      async (id, _actor, _expected, status) => ({
+        id,
+        status,
+        googleDriveFileId: "drive-file-1",
+      }),
+    );
   });
 
   it("accepts only a matching supported extension and MIME type", () => {
@@ -199,5 +214,59 @@ describe("project document service", () => {
       ),
     ).rejects.toThrow("database unavailable");
     expect(mocks.deleteDriveFile).toHaveBeenCalledWith({}, "drive-file-1");
+  });
+
+  it("enforces latest-version approval transitions", async () => {
+    mocks.get.mockResolvedValueOnce({
+      id: "document-1",
+      isLatest: true,
+      status: "DRAFT",
+    });
+    await submitDocument("document-1", "admin-1", null);
+    expect(mocks.transition).toHaveBeenLastCalledWith(
+      "document-1",
+      "admin-1",
+      "DRAFT",
+      "PENDING_REVIEW",
+      "SUBMITTED",
+      null,
+    );
+
+    mocks.get.mockResolvedValueOnce({
+      id: "document-1",
+      isLatest: true,
+      status: "PENDING_REVIEW",
+    });
+    await approveDocument("document-1", "admin-1", "Reviewed");
+    expect(mocks.transition).toHaveBeenLastCalledWith(
+      "document-1",
+      "admin-1",
+      "PENDING_REVIEW",
+      "APPROVED",
+      "APPROVED",
+      "Reviewed",
+    );
+
+    mocks.get.mockResolvedValueOnce({
+      id: "document-old",
+      isLatest: false,
+      status: "PENDING_REVIEW",
+    });
+    await expect(
+      rejectDocument("document-old", "admin-1", "Outdated"),
+    ).rejects.toThrow("Only the latest document version can be reviewed");
+  });
+
+  it("blocks deletion of approved documents before touching Drive", async () => {
+    mocks.get.mockResolvedValueOnce({
+      id: "document-1",
+      status: "APPROVED",
+      googleDriveFileId: "drive-file-1",
+    });
+    await expect(deleteDocument("document-1", "admin-1")).rejects.toThrow(
+      "Approved documents cannot be deleted",
+    );
+    expect(mocks.deleteDriveFile).not.toHaveBeenCalled();
+    expect(mocks.remove).not.toHaveBeenCalled();
   });
 });

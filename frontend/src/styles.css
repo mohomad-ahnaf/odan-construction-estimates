@@ -2415,6 +2415,31 @@ td small {
   font-weight: 800;
   text-transform: uppercase;
 }
+.document-status {
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: #e9edf1;
+  color: var(--navy);
+  font-size: 9px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.document-status-pending_review {
+  background: #fff4d8;
+  color: #795500;
+}
+.document-status-approved {
+  background: #e4f3eb;
+  color: #176044;
+}
+.document-status-rejected {
+  background: #fae7e7;
+  color: #8d3030;
+}
+.document-status-archived {
+  background: #e8e8e8;
+  color: #555;
+}
 .document-meta {
   display: grid;
   gap: 7px;
@@ -2461,6 +2486,14 @@ td small {
 .document-actions .document-delete {
   min-height: auto;
   margin-left: auto;
+  padding: 0;
+  color: var(--danger);
+}
+.document-actions .document-workflow-action {
+  color: var(--success);
+}
+.document-actions .document-reject {
+  min-height: auto;
   padding: 0;
   color: var(--danger);
 }
@@ -2557,6 +2590,14 @@ td small {
 .modal-card form label {
   display: grid;
   gap: 7px;
+  color: var(--navy);
+  font-size: 12px;
+  font-weight: 700;
+}
+.modal-field {
+  display: grid;
+  gap: 7px;
+  margin-top: 18px;
   color: var(--navy);
   font-size: 12px;
   font-weight: 700;

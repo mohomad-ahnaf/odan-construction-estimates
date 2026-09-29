@@ -1,6 +1,10 @@
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import type { DocumentCategory } from "@prisma/client";
+import type {
+  DocumentApprovalAction,
+  DocumentCategory,
+  DocumentStatus,
+} from "@prisma/client";
 import { AppError } from "../middleware/errors.js";
 import { maximumDocumentBytes } from "../middleware/document-upload.js";
 import { documentRepository } from "../repositories/document.repository.js";
@@ -174,9 +178,84 @@ export async function getDocumentVersions(id: string) {
   );
 }
 
+async function transitionDocument(
+  id: string,
+  actorId: string,
+  expected: DocumentStatus,
+  status: DocumentStatus,
+  action: DocumentApprovalAction,
+  comment: string | null,
+) {
+  const document = await documentRepository.get(id);
+  if (!document) throw new AppError(404, "Document not found");
+  if (!document.isLatest)
+    throw new AppError(409, "Only the latest document version can be reviewed");
+  if (document.status !== expected)
+    throw new AppError(409, `Document must be ${expected.toLowerCase().replace("_", " ")}`);
+  return serializeDocument(
+    await documentRepository.transition(
+      id,
+      actorId,
+      expected,
+      status,
+      action,
+      comment,
+    ),
+  );
+}
+
+export function submitDocument(
+  id: string,
+  actorId: string,
+  comment: string | null,
+) {
+  return transitionDocument(
+    id,
+    actorId,
+    "DRAFT",
+    "PENDING_REVIEW",
+    "SUBMITTED",
+    comment,
+  );
+}
+
+export function approveDocument(
+  id: string,
+  actorId: string,
+  comment: string | null,
+) {
+  return transitionDocument(
+    id,
+    actorId,
+    "PENDING_REVIEW",
+    "APPROVED",
+    "APPROVED",
+    comment,
+  );
+}
+
+export function rejectDocument(id: string, actorId: string, comment: string) {
+  return transitionDocument(
+    id,
+    actorId,
+    "PENDING_REVIEW",
+    "REJECTED",
+    "REJECTED",
+    comment,
+  );
+}
+
+export async function getDocumentApprovalHistory(id: string) {
+  if (!(await documentRepository.get(id)))
+    throw new AppError(404, "Document not found");
+  return documentRepository.approvalHistory(id);
+}
+
 export async function deleteDocument(id: string, actorId: string) {
   const document = await documentRepository.get(id);
   if (!document) throw new AppError(404, "Document not found");
+  if (document.status === "APPROVED")
+    throw new AppError(409, "Approved documents cannot be deleted");
   const drive = await getAuthenticatedDriveClient();
   await deleteDriveFile(drive, document.googleDriveFileId);
   await documentRepository.remove(id, actorId);

@@ -20,6 +20,7 @@ const drawing = {
   revisionNote: null,
   isLatest: true,
   versionGroupId: "group-1",
+  status: "DRAFT",
   createdAt: "2026-09-29T10:00:00.000Z",
   updatedAt: "2026-09-29T10:00:00.000Z",
   links: { viewUrl: "https://drive.test/view/1", downloadUrl: "https://drive.test/download/1" },
@@ -33,6 +34,7 @@ const photo = {
   category: "IMAGES",
   links: { viewUrl: "https://drive.test/view/2", downloadUrl: "https://drive.test/download/2" },
 };
+let listedDocuments = [drawing, photo];
 
 function renderDocuments() {
   const client = new QueryClient({
@@ -48,9 +50,10 @@ function renderDocuments() {
 describe("Project Documents workspace", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    listedDocuments = [drawing, photo];
     vi.mocked(api).mockImplementation(async (path, options) => {
       if (path === "/projects/project-1/documents" && !options?.method)
-        return [drawing, photo] as never;
+        return listedDocuments as never;
       if (path === "/projects/project-1/documents" && options?.method === "POST")
         return drawing as never;
       if (path === "/documents/document-1" && options?.method === "DELETE")
@@ -68,6 +71,28 @@ describe("Project Documents workspace", () => {
         ] as never;
       if (path === "/documents/document-1/revision" && options?.method === "POST")
         return { ...drawing, id: "document-3", version: 2 } as never;
+      if (path === "/documents/document-1/submit" && options?.method === "POST") {
+        const updated = { ...drawing, status: "PENDING_REVIEW" as const };
+        listedDocuments = [updated, photo];
+        return updated as never;
+      }
+      if (path === "/documents/document-1/reject" && options?.method === "POST") {
+        const updated = { ...drawing, status: "REJECTED" as const };
+        listedDocuments = [updated, photo];
+        return updated as never;
+      }
+      if (path === "/documents/document-1/approval-history" && !options?.method)
+        return [
+          {
+            id: "approval-1",
+            documentId: "document-1",
+            action: "SUBMITTED",
+            comment: null,
+            approvedBy: "admin-1",
+            createdAt: "2026-09-30T01:00:00.000Z",
+            approver: { id: "admin-1", name: "Administrator" },
+          },
+        ] as never;
       throw new Error(`Unexpected request ${path}`);
     });
   });
@@ -189,5 +214,40 @@ describe("Project Documents workspace", () => {
       "The file must be 25 MB or smaller.",
     );
     expect(vi.mocked(api).mock.calls.some(([, options]) => options?.method === "POST")).toBe(false);
+  });
+
+  it("submits, rejects with a required comment and shows approval history", async () => {
+    renderDocuments();
+    await screen.findByText("ground-floor.pdf");
+    expect(screen.getAllByText("Draft")[0]).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "Submit for Review" })[0]);
+    await waitFor(() =>
+      expect(api).toHaveBeenCalledWith("/documents/document-1/submit", {
+        method: "POST",
+        body: "{}",
+      }),
+    );
+    const reject = await screen.findByRole("button", { name: "Reject" });
+    fireEvent.click(reject);
+    const rejectDialog = screen.getByRole("dialog", { name: "Reject Document" });
+    fireEvent.click(within(rejectDialog).getByRole("button", { name: "Reject Document" }));
+    expect(within(rejectDialog).getByRole("alert")).toHaveTextContent(
+      "A rejection comment is required.",
+    );
+    fireEvent.change(within(rejectDialog).getByLabelText("Rejection comment"), {
+      target: { value: "Correct the drawing dimensions" },
+    });
+    fireEvent.click(within(rejectDialog).getByRole("button", { name: "Reject Document" }));
+    await waitFor(() =>
+      expect(api).toHaveBeenCalledWith("/documents/document-1/reject", {
+        method: "POST",
+        body: JSON.stringify({ comment: "Correct the drawing dimensions" }),
+      }),
+    );
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Approval History" })[0]);
+    const history = await screen.findByRole("dialog", { name: "Approval History" });
+    expect(await within(history).findByText("Pending Review")).toBeInTheDocument();
+    expect(within(history).getByText("Administrator")).toBeInTheDocument();
   });
 });
