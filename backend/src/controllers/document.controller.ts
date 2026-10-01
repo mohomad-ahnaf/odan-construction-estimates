@@ -11,6 +11,19 @@ import * as documentService from "../services/document.service.js";
 
 const id = (value: unknown) => z.string().uuid().parse(value);
 
+function inlineDisposition(fileName: string) {
+  const safeName = fileName
+    .normalize("NFKD")
+    .replace(/[^\x20-\x7e]/g, "_")
+    .replace(/["\\]/g, "_")
+    .slice(0, 180) || "document";
+  const encoded = encodeURIComponent(fileName).replace(
+    /[!'()*]/g,
+    (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+  return `inline; filename="${safeName}"; filename*=UTF-8''${encoded}`;
+}
+
 export const upload: RequestHandler = async (req, res) => {
   if (!req.file) throw new AppError(400, "A document file is required");
   const category = documentCategorySchema.parse(req.body.category);
@@ -34,6 +47,19 @@ export const listForProject: RequestHandler = async (req, res) => {
 
 export const get: RequestHandler = async (req, res) => {
   res.json(await documentService.getDocument(id(req.params.id)));
+};
+
+export const content: RequestHandler = async (req, res, next) => {
+  const file = await documentService.getDocumentContent(id(req.params.id));
+  res.setHeader("Content-Type", file.fileType);
+  res.setHeader("Content-Disposition", inlineDisposition(file.fileName));
+  res.setHeader("Content-Length", String(file.fileSize));
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  file.stream.once("error", (error) => {
+    if (res.headersSent) res.destroy(error);
+    else next(error);
+  });
+  file.stream.pipe(res);
 };
 
 export const versions: RequestHandler = async (req, res) => {

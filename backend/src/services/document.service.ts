@@ -13,6 +13,7 @@ import {
   ensureProjectDriveFolders,
   generateDriveLinks,
   getAuthenticatedDriveClient,
+  getDriveFileContent,
   getDriveFileMetadata,
   uploadDriveFile,
   type DriveFolderName,
@@ -168,6 +169,19 @@ export async function getDocument(id: string) {
     document.googleDriveFileId,
   );
   return { ...serializeDocument(document), driveMetadata };
+}
+
+export async function getDocumentContent(id: string) {
+  const document = await documentRepository.get(id);
+  if (!document) throw new AppError(404, "Document not found");
+  const drive = await getAuthenticatedDriveClient();
+  const stream = await getDriveFileContent(drive, document.googleDriveFileId);
+  return {
+    stream,
+    fileName: document.fileName,
+    fileType: document.fileType,
+    fileSize: document.fileSize,
+  };
 }
 
 export async function getDocumentVersions(id: string) {

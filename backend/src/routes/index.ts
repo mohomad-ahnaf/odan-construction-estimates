@@ -90,6 +90,7 @@ routes.patch(
   clients.statusProject,
 );
 routes.get("/estimates", estimates.list);
+routes.get("/documents/:id/content", allow("ADMIN"), documents.content);
 routes.get("/documents/:id", allow("ADMIN"), documents.get);
 routes.get("/documents/:id/versions", allow("ADMIN"), documents.versions);
 routes.get(

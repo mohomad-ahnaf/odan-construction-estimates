@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   ensureProjectDriveFolders: vi.fn(),
   uploadDriveFile: vi.fn(),
   deleteDriveFile: vi.fn(),
+  getDriveFileContent: vi.fn(),
   getDriveFileMetadata: vi.fn(),
 }));
 
@@ -38,6 +39,7 @@ vi.mock("./google-drive.service.js", () => ({
   ensureProjectDriveFolders: mocks.ensureProjectDriveFolders,
   uploadDriveFile: mocks.uploadDriveFile,
   deleteDriveFile: mocks.deleteDriveFile,
+  getDriveFileContent: mocks.getDriveFileContent,
   getDriveFileMetadata: mocks.getDriveFileMetadata,
   generateDriveLinks: (id: string) => ({
     viewUrl: `view/${id}`,
@@ -48,6 +50,7 @@ vi.mock("./google-drive.service.js", () => ({
 import {
   approveDocument,
   deleteDocument,
+  getDocumentContent,
   getDocumentVersions,
   rejectDocument,
   submitDocument,
@@ -102,6 +105,7 @@ describe("project document service", () => {
       versionGroupId: "group-1",
     }));
     mocks.deleteDriveFile.mockResolvedValue(true);
+    mocks.getDriveFileContent.mockResolvedValue({ pipe: vi.fn() });
     mocks.transition.mockImplementation(
       async (id, _actor, _expected, status) => ({
         id,
@@ -201,6 +205,26 @@ describe("project document service", () => {
     ]);
     const history = await getDocumentVersions("document-1");
     expect(history.map((record) => record.version)).toEqual([2, 1]);
+  });
+
+  it("retrieves private file content through the authenticated Drive client", async () => {
+    const stream = { pipe: vi.fn() };
+    mocks.get.mockResolvedValueOnce({
+      fileName: "site-plan.pdf",
+      fileType: "application/pdf",
+      fileSize: 2048,
+      googleDriveFileId: "drive-file-1",
+    });
+    mocks.getDriveFileContent.mockResolvedValueOnce(stream);
+
+    await expect(getDocumentContent("document-1")).resolves.toEqual({
+      stream,
+      fileName: "site-plan.pdf",
+      fileType: "application/pdf",
+      fileSize: 2048,
+    });
+    expect(mocks.getAuthenticatedDriveClient).toHaveBeenCalledOnce();
+    expect(mocks.getDriveFileContent).toHaveBeenCalledWith({}, "drive-file-1");
   });
 
   it("removes the Drive file if the metadata transaction fails", async () => {

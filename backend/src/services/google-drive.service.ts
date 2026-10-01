@@ -333,6 +333,21 @@ export async function getDriveFileMetadata(
   }
 }
 
+export async function getDriveFileContent(
+  drive: drive_v3.Drive,
+  fileId: string,
+) {
+  try {
+    const result = await drive.files.get(
+      { fileId, alt: "media" },
+      { responseType: "stream" },
+    );
+    return result.data as unknown as Readable;
+  } catch (error) {
+    driveFailure(error, "retrieve the file content");
+  }
+}
+
 export function generateDriveLinks(fileId: string) {
   const encoded = encodeURIComponent(fileId);
   return {

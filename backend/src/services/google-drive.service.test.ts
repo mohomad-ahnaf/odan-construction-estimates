@@ -5,6 +5,7 @@ import {
   createDriveFolder,
   decryptGoogleToken,
   encryptGoogleToken,
+  getDriveFileContent,
   verifyOAuthState,
 } from "./google-drive.service.js";
 
@@ -51,5 +52,20 @@ describe("Google Drive folder management", () => {
       }),
     );
     expect(create).not.toHaveBeenCalled();
+  });
+});
+
+describe("Google Drive private file content", () => {
+  it("requests file bytes as an authenticated stream", async () => {
+    const stream = { pipe: vi.fn() };
+    const get = vi.fn().mockResolvedValue({ data: stream });
+
+    await expect(
+      getDriveFileContent({ files: { get } } as never, "drive-file-1"),
+    ).resolves.toBe(stream);
+    expect(get).toHaveBeenCalledWith(
+      { fileId: "drive-file-1", alt: "media" },
+      { responseType: "stream" },
+    );
   });
 });
