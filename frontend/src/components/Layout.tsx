@@ -31,11 +31,21 @@ export function Layout() {
             </span>{" "}
             Clients
           </NavLink>
+          <NavLink to="/projects">
+            <span className="nav-icon" aria-hidden="true">
+              ▥
+            </span>{" "}
+            Projects
+          </NavLink>
           <NavLink to="/estimates">
             <span className="nav-icon" aria-hidden="true">
               ▤
             </span>{" "}
             Estimates
+          </NavLink>
+          <NavLink to="/unit-converter">
+            <span className="nav-icon" aria-hidden="true">⇄</span>{" "}
+            Unit Converter
           </NavLink>
           {session?.user?.role === "ADMIN" && (
             <>

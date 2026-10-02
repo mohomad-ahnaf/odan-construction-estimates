@@ -2,13 +2,19 @@ import { Prisma } from "@prisma/client";
 import { db } from "../db.js";
 import { totals } from "../services/totals.js";
 import type { z } from "zod";
-import type { clientSchema, listSchema, projectSchema } from "../validation.js";
+import type {
+  clientSchema,
+  listSchema,
+  projectListSchema,
+  projectSchema,
+} from "../validation.js";
 import { AppError } from "../middleware/errors.js";
 import { nextCode } from "./code.repository.js";
 
 type ClientInput = z.infer<typeof clientSchema>;
 type ProjectInput = z.infer<typeof projectSchema>;
 type ListInput = z.infer<typeof listSchema>;
+type ProjectListInput = z.infer<typeof projectListSchema>;
 const sumByCurrency = (
   estimates: {
     currency: string;
@@ -216,6 +222,56 @@ export const clientRepository = {
               ).total,
             }
           : null,
+      })),
+      total,
+      page: query.page,
+      pageSize: query.pageSize,
+    };
+  },
+  async listProjects(query: ProjectListInput) {
+    const where: Prisma.ProjectWhereInput = {
+      ...(query.clientId ? { clientId: query.clientId } : {}),
+      ...(query.active === undefined
+        ? {}
+        : { status: query.active === "true" ? "ACTIVE" : "ARCHIVED" }),
+      OR: [
+        { projectName: { contains: query.search, mode: "insensitive" } },
+        { projectCode: { contains: query.search, mode: "insensitive" } },
+        {
+          client: {
+            name: { contains: query.search, mode: "insensitive" },
+          },
+        },
+      ],
+    };
+    const [rows, total] = await db.$transaction([
+      db.project.findMany({
+        where,
+        include: {
+          client: {
+            select: { id: true, name: true, clientCode: true, active: true },
+          },
+          _count: { select: { estimates: true } },
+        },
+        orderBy: [
+          {
+            [query.sort === "name" ? "projectName" : "createdAt"]:
+              query.direction,
+          },
+          { id: "asc" },
+        ],
+        skip: (query.page - 1) * query.pageSize,
+        take: query.pageSize,
+      }),
+      db.project.count({ where }),
+    ]);
+    return {
+      data: rows.map(({ client, _count, ...project }) => ({
+        ...projectOutput(project),
+        clientName: client.name,
+        clientCode: client.clientCode,
+        clientActive: client.active,
+        estimateCount: _count.estimates,
       })),
       total,
       page: query.page,

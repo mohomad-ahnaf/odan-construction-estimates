@@ -1,6 +1,11 @@
 import type { RequestHandler } from "express";
 import { z } from "zod";
-import { clientSchema, projectSchema, listSchema } from "../validation.js";
+import {
+  clientSchema,
+  projectSchema,
+  listSchema,
+  projectListSchema,
+} from "../validation.js";
 import { clientService as repo } from "../services/client.service.js";
 const id = (value: unknown) => z.string().uuid().parse(value);
 export const list: RequestHandler = async (req, res) => {
@@ -29,6 +34,9 @@ export const status: RequestHandler = async (req, res) => {
 };
 export const projects: RequestHandler = async (req, res) => {
   res.json(await repo.projects(id(req.params.id), listSchema.parse(req.query)));
+};
+export const listProjects: RequestHandler = async (req, res) => {
+  res.json(await repo.listProjects(projectListSchema.parse(req.query)));
 };
 export const estimates: RequestHandler = async (req, res) => {
   res.json(

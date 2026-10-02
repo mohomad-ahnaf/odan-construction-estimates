@@ -127,6 +127,13 @@ export type Project = ProjectInput & {
   estimateCount?: number;
   latestEstimateValue?: { currency: string; total: string } | null;
 };
+export type ProjectDirectoryItem = Omit<Project, "startDate"> & {
+  startDate: string | null;
+  clientName: string;
+  clientCode: string | null;
+  clientActive: boolean;
+  estimateCount: number;
+};
 export type DocumentCategory =
   | "DRAWINGS"
   | "IMAGES"
@@ -168,6 +175,71 @@ export type DocumentApproval = {
   approvedBy: string;
   createdAt: string;
   approver: { id: string; name: string };
+};
+export type PlanPoint = { x: number; y: number };
+export type PlanDocument = {
+  id: string;
+  projectId: string;
+  fileName: string;
+  fileType: "application/pdf" | "image/png" | "image/jpeg";
+  version: number;
+  versionGroupId: string;
+  isLatest: boolean;
+  status: DocumentStatus;
+  createdAt: string;
+  uploader: { id: string; name: string; email: string };
+};
+export type PageCalibration = {
+  id: string;
+  documentId: string;
+  pageNumber: number;
+  pageWidth: number;
+  pageHeight: number;
+  referenceGeometry: { points: [PlanPoint, PlanPoint] };
+  referenceLengthMeters: string;
+  referenceUnit: "mm" | "cm" | "m" | "ft" | "in";
+  checkReferenceGeometry: { points: [PlanPoint, PlanPoint] } | null;
+  checkReferenceLengthMeters: string | null;
+  metresPerPageUnit: number;
+  checkDifferencePercent: number | null;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+};
+export type PlanMeasurement = {
+  id: string;
+  documentId: string;
+  groupId: string;
+  group: { id: string; name: string; documentId: string };
+  pageNumber: number;
+  pageWidth: number;
+  pageHeight: number;
+  type: "LENGTH" | "AREA" | "COUNT";
+  label: string;
+  geometry: { points: PlanPoint[] };
+  quantity: string;
+  unit: "m" | "m²" | "count";
+  confirmed: boolean;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+  creator: { id: string; name: string };
+  document: { id: string; version: number; fileName: string; projectId: string };
+};
+export type PlanMeasurementGroup = {
+  id: string;
+  documentId: string;
+  name: string;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+  creator: { id: string; name: string };
+  _count: { measurements: number };
+};
+export type PlanPageWorkspace = {
+  document: Pick<PlanDocument, "id" | "projectId" | "fileName" | "fileType" | "version" | "status">;
+  calibration: PageCalibration | null;
+  measurements: PlanMeasurement[];
 };
 export type Dashboard = {
   activeProjects: number;

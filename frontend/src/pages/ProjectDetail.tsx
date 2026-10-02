@@ -7,6 +7,7 @@ import { StatusBadge } from "../components/StatusBadge";
 import { NavigableRow } from "../components/NavigableRow";
 import { estimateDescription } from "../lib/estimateDescription";
 import { ProjectDocuments } from "../components/ProjectDocuments";
+import { PlanMeasurementWorkspace } from "../components/PlanMeasurementWorkspace";
 import type { Client, ClientEstimate, Estimate, Page, Project } from "../types";
 
 export function ProjectDetail() {
@@ -16,7 +17,8 @@ export function ProjectDetail() {
   const requestedTab = searchParams.get("tab");
   const tab =
     requestedTab === "client-estimates" ||
-    (requestedTab === "documents" && session?.user?.role === "ADMIN")
+    ((requestedTab === "documents" || requestedTab === "plans") &&
+      session?.user?.role === "ADMIN")
       ? requestedTab
       : "estimates";
   const cache = useQueryClient();
@@ -193,14 +195,24 @@ export function ProjectDetail() {
           Client Estimates
         </button>
         {session?.user?.role === "ADMIN" && (
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === "documents"}
-            onClick={() => setSearchParams({ tab: "documents" })}
-          >
-            Documents
-          </button>
+          <>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === "documents"}
+              onClick={() => setSearchParams({ tab: "documents" })}
+            >
+              Documents
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === "plans"}
+              onClick={() => setSearchParams({ tab: "plans" })}
+            >
+              Plans
+            </button>
+          </>
         )}
       </div>
       {tab === "estimates" ? (
@@ -434,8 +446,10 @@ export function ProjectDetail() {
             </div>
           </div>
         </section>
-      ) : (
+      ) : tab === "documents" ? (
         <ProjectDocuments projectId={id!} />
+      ) : (
+        <PlanMeasurementWorkspace projectId={id!} />
       )}
     </>
   );

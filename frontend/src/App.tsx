@@ -13,9 +13,11 @@ import { ClientEditor } from "./pages/ClientEditor";
 import { ClientDetail } from "./pages/ClientDetail";
 import { ProjectEditor } from "./pages/ProjectEditor";
 import { ProjectDetail } from "./pages/ProjectDetail";
+import { Projects } from "./pages/Projects";
 import { ClientEstimateEditor } from "./pages/ClientEstimateEditor";
 import { ClientEstimateDetail } from "./pages/ClientEstimateDetail";
 import { PdfTemplateSettings } from "./pages/PdfTemplateSettings";
+import { UnitConverter } from "./pages/UnitConverter";
 export function App() {
   const { session, loading, error, refresh } = useAuth();
   if (loading)
@@ -37,8 +39,10 @@ export function App() {
         <Route path="/" element={<Dashboard />} />
         <Route path="/clients" element={<Clients />} />
         <Route path="/clients/:id" element={<ClientDetail />} />
+        <Route path="/projects" element={<Projects />} />
         <Route path="/projects/:id" element={<ProjectDetail />} />
         <Route path="/estimates" element={<Estimates />} />
+        <Route path="/unit-converter" element={<UnitConverter />} />
         {session.user.role !== "VIEWER" && (
           <>
             <Route

@@ -6,6 +6,7 @@ import * as clients from "../controllers/client.controller.js";
 import * as clientEstimates from "../controllers/client-estimate.controller.js";
 import * as pdfTemplateSettings from "../controllers/pdf-template-settings.controller.js";
 import * as documents from "../controllers/document.controller.js";
+import * as planMeasurements from "../controllers/plan-measurement.controller.js";
 import { requireAuth, allow } from "../middleware/auth.js";
 import { documentUpload } from "../middleware/document-upload.js";
 export const routes = Router();
@@ -56,7 +57,63 @@ routes.post(
 );
 routes.get("/clients/:id/estimates", clients.estimates);
 routes.get("/clients/:id/activity", allow("ADMIN"), clients.activity);
+routes.get("/projects", clients.listProjects);
 routes.get("/projects/:id", clients.getProject);
+routes.get(
+  "/projects/:projectId/plans",
+  allow("ADMIN"),
+  planMeasurements.plans,
+);
+routes.get(
+  "/projects/:projectId/plan-measurements",
+  allow("ADMIN"),
+  planMeasurements.summary,
+);
+routes.get(
+  "/projects/:projectId/plans/:documentId/pages/:pageNumber",
+  allow("ADMIN"),
+  planMeasurements.page,
+);
+routes.get(
+  "/projects/:projectId/plans/:documentId/measurement-groups",
+  allow("ADMIN"),
+  planMeasurements.groups,
+);
+routes.post(
+  "/projects/:projectId/plans/:documentId/measurement-groups",
+  allow("ADMIN"),
+  planMeasurements.createGroup,
+);
+routes.put(
+  "/projects/:projectId/plans/:documentId/calibration",
+  allow("ADMIN"),
+  planMeasurements.calibrate,
+);
+routes.post(
+  "/projects/:projectId/plans/:documentId/measurements",
+  allow("ADMIN"),
+  planMeasurements.create,
+);
+routes.put(
+  "/plan-measurements/:id",
+  allow("ADMIN"),
+  planMeasurements.update,
+);
+routes.delete(
+  "/plan-measurements/:id",
+  allow("ADMIN"),
+  planMeasurements.remove,
+);
+routes.put(
+  "/plan-measurement-groups/:id",
+  allow("ADMIN"),
+  planMeasurements.renameGroup,
+);
+routes.delete(
+  "/plan-measurement-groups/:id",
+  allow("ADMIN"),
+  planMeasurements.removeGroup,
+);
 routes.get(
   "/projects/:projectId/documents",
   allow("ADMIN"),

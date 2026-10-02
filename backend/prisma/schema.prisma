@@ -48,6 +48,12 @@ enum DocumentApprovalAction {
   REJECTED
 }
 
+enum MeasurementType {
+  LENGTH
+  AREA
+  COUNT
+}
+
 model User {
   id           String    @id @default(uuid())
   email        String    @unique
@@ -58,6 +64,9 @@ model User {
   clientEstimates ClientEstimate[]
   documents    Document[]
   documentApprovals DocumentApproval[]
+  planCalibrations PageCalibration[]
+  planMeasurements PlanMeasurement[]
+  planMeasurementGroups PlanMeasurementGroup[]
   createdAt    DateTime  @default(now())
 }
 
@@ -266,6 +275,9 @@ model Document {
   versionGroupId      String
   status              DocumentStatus   @default(DRAFT)
   approvals           DocumentApproval[]
+  calibrations        PageCalibration[]
+  measurements        PlanMeasurement[]
+  measurementGroups   PlanMeasurementGroup[]
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
 
@@ -273,6 +285,71 @@ model Document {
   @@index([projectId, isLatest, createdAt])
   @@index([uploadedBy])
   @@unique([versionGroupId, version])
+}
+
+model PageCalibration {
+  id                         String   @id @default(uuid())
+  documentId                 String
+  document                   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  pageNumber                 Int
+  pageWidth                  Float
+  pageHeight                 Float
+  referenceGeometry          Json
+  referenceLengthMeters      Decimal  @db.Decimal(24, 10)
+  referenceUnit              String
+  checkReferenceGeometry     Json?
+  checkReferenceLengthMeters Decimal? @db.Decimal(24, 10)
+  createdBy                  String
+  creator                    User     @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+  version                    Int      @default(1)
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  @@unique([documentId, pageNumber])
+  @@index([createdBy])
+}
+
+model PlanMeasurement {
+  id         String          @id @default(uuid())
+  documentId String
+  document   Document        @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  groupId    String
+  group      PlanMeasurementGroup @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  pageNumber Int
+  pageWidth  Float
+  pageHeight Float
+  type       MeasurementType
+  label      String
+  geometry   Json
+  quantity   Decimal         @db.Decimal(24, 10)
+  unit       String
+  confirmed  Boolean         @default(false)
+  createdBy  String
+  creator    User            @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+  version    Int             @default(1)
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  @@index([documentId, pageNumber, createdAt])
+  @@index([groupId, createdAt])
+  @@index([createdBy])
+}
+
+model PlanMeasurementGroup {
+  id           String            @id @default(uuid())
+  documentId   String
+  document     Document          @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  name         String
+  createdBy    String
+  creator      User              @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+  measurements PlanMeasurement[]
+  version      Int               @default(1)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@unique([documentId, name])
+  @@index([documentId, createdAt])
+  @@index([createdBy])
 }
 
 model DocumentApproval {

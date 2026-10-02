@@ -118,3 +118,7 @@ export const listSchema = z
     active: z.enum(["true", "false"]).optional(),
   })
   .strict();
+
+export const projectListSchema = listSchema.extend({
+  clientId: z.string().uuid().optional(),
+});

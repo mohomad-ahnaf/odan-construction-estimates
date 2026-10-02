@@ -10,6 +10,7 @@ export const clientService = {
   update: clientRepository.update.bind(clientRepository),
   status: clientRepository.status.bind(clientRepository),
   projects: clientRepository.projects.bind(clientRepository),
+  listProjects: clientRepository.listProjects.bind(clientRepository),
   estimates: clientRepository.estimates.bind(clientRepository),
   activity: clientRepository.activity.bind(clientRepository),
   createProject: clientRepository.createProject.bind(clientRepository),
