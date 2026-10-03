@@ -5,6 +5,8 @@ import {
   approvalCommentSchema,
   rejectionCommentSchema,
   revisionNoteSchema,
+  documentMetadataSchema,
+  uploadMetadataSchema,
 } from "../document.validation.js";
 import { AppError } from "../middleware/errors.js";
 import * as documentService from "../services/document.service.js";
@@ -28,6 +30,7 @@ export const upload: RequestHandler = async (req, res) => {
   if (!req.file) throw new AppError(400, "A document file is required");
   const category = documentCategorySchema.parse(req.body.category);
   const revisionNote = revisionNoteSchema.parse(req.body.revisionNote);
+  const metadata = uploadMetadataSchema.parse({ title: req.body.title, description: req.body.description });
   res.status(201).json(
     await documentService.uploadProjectDocument(
       id(req.params.projectId),
@@ -35,6 +38,7 @@ export const upload: RequestHandler = async (req, res) => {
       req.file,
       req.user!.id,
       revisionNote,
+      metadata,
     ),
   );
 };
@@ -64,6 +68,16 @@ export const content: RequestHandler = async (req, res, next) => {
 
 export const versions: RequestHandler = async (req, res) => {
   res.json(await documentService.getDocumentVersions(id(req.params.id)));
+};
+
+export const updateMetadata: RequestHandler = async (req, res) => {
+  res.json(await documentService.updateDocumentMetadata(id(req.params.id),
+    documentMetadataSchema.parse(req.body), req.user!.id));
+};
+
+export const removePhotoHistory: RequestHandler = async (req, res) => {
+  await documentService.deletePhotoHistory(id(req.params.id), req.user!.id);
+  res.status(204).send();
 };
 
 export const revision: RequestHandler = async (req, res) => {

@@ -18,6 +18,8 @@ type DocumentWrite = {
   projectId: string;
   uploadedBy: string;
   fileName: string;
+  title?: string | null;
+  description?: string | null;
   fileType: string;
   fileSize: number;
   category: DocumentCategory;
@@ -62,6 +64,39 @@ export const documentRepository = {
       include: documentInclude,
       orderBy: { version: "desc" },
     });
+  },
+  async updateMetadata(id: string, title: string | null | undefined,
+    description: string | null | undefined, actorId: string) {
+    return db.$transaction(async (tx) => {
+      const changed = await tx.document.updateMany({
+        where: { id, isLatest: true, status: { not: "APPROVED" } },
+        data: { ...(title !== undefined ? { title } : {}),
+          ...(description !== undefined ? { description } : {}) },
+      });
+      if (changed.count !== 1) throw new AppError(409, "Photo revision changed; refresh and try again");
+      await tx.auditLog.create({ data: { actorId, action: "DOCUMENT_METADATA_UPDATED", entityId: id,
+        metadata: { fields: [title !== undefined ? "title" : null,
+          description !== undefined ? "description" : null].filter(Boolean) } } });
+      return tx.document.findUniqueOrThrow({ where: { id }, include: documentInclude });
+    });
+  },
+  async removeVersionGroup(versionGroupId: string, expectedIds: string[], actorId: string) {
+    return db.$transaction(async (tx) => {
+      const records = await tx.document.findMany({ where: { versionGroupId },
+        select: { id: true, projectId: true, category: true, status: true } });
+      const actualIds = records.map((record) => record.id).sort();
+      const requiredIds = [...expectedIds].sort();
+      if (actualIds.length !== expectedIds.length ||
+          actualIds.some((id, index) => id !== requiredIds[index]))
+        throw new AppError(409, "Photo history changed; refresh and try again");
+      if (records.some((record) => record.category !== "IMAGES" || record.status === "APPROVED"))
+        throw new AppError(409, "Approved photos cannot be deleted");
+      const removed = await tx.document.deleteMany({ where: { versionGroupId, id: { in: expectedIds } } });
+      if (removed.count !== expectedIds.length)
+        throw new AppError(409, "Photo history changed; refresh and try again");
+      await tx.auditLog.create({ data: { actorId, action: "SITE_PHOTO_DELETED",
+        entityId: versionGroupId, metadata: { projectId: records[0]!.projectId, versions: records.length } } });
+    }, { isolationLevel: "Serializable" });
   },
   approvalHistory(documentId: string) {
     return db.documentApproval.findMany({
@@ -138,6 +173,9 @@ export const documentRepository = {
         _max: { version: true },
       });
       const version = (latest._max.version ?? 0) + 1;
+      const latestRecord = await tx.document.findFirstOrThrow({
+        where: { versionGroupId: base.versionGroupId, isLatest: true },
+      });
       await tx.document.updateMany({
         where: { versionGroupId: base.versionGroupId, isLatest: true },
         data: { isLatest: false },
@@ -145,6 +183,8 @@ export const documentRepository = {
       const document = await tx.document.create({
         data: {
           ...input,
+          title: input.title === undefined ? latestRecord.title : input.title,
+          description: input.description === undefined ? latestRecord.description : input.description,
           projectId: base.projectId,
           category: base.category,
           versionGroupId: base.versionGroupId,

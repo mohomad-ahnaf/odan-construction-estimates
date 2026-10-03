@@ -11,10 +11,13 @@ const mocks = vi.hoisted(() => ({
   transition: vi.fn(),
   approvalHistory: vi.fn(),
   remove: vi.fn(),
+  updateMetadata: vi.fn(),
+  removeVersionGroup: vi.fn(),
   getAuthenticatedDriveClient: vi.fn(),
   ensureProjectDriveFolders: vi.fn(),
   uploadDriveFile: vi.fn(),
   deleteDriveFile: vi.fn(),
+  setDriveFileTrashed: vi.fn(),
   getDriveFileContent: vi.fn(),
   getDriveFileMetadata: vi.fn(),
 }));
@@ -31,6 +34,8 @@ vi.mock("../repositories/document.repository.js", () => ({
     transition: mocks.transition,
     approvalHistory: mocks.approvalHistory,
     remove: mocks.remove,
+    updateMetadata: mocks.updateMetadata,
+    removeVersionGroup: mocks.removeVersionGroup,
   },
 }));
 
@@ -39,6 +44,7 @@ vi.mock("./google-drive.service.js", () => ({
   ensureProjectDriveFolders: mocks.ensureProjectDriveFolders,
   uploadDriveFile: mocks.uploadDriveFile,
   deleteDriveFile: mocks.deleteDriveFile,
+  setDriveFileTrashed: mocks.setDriveFileTrashed,
   getDriveFileContent: mocks.getDriveFileContent,
   getDriveFileMetadata: mocks.getDriveFileMetadata,
   generateDriveLinks: (id: string) => ({
@@ -50,12 +56,14 @@ vi.mock("./google-drive.service.js", () => ({
 import {
   approveDocument,
   deleteDocument,
+  deletePhotoHistory,
   getDocumentContent,
   getDocumentVersions,
   rejectDocument,
   submitDocument,
   uploadDocumentRevision,
   uploadProjectDocument,
+  updateDocumentMetadata,
   validateDocumentFile,
 } from "./document.service.js";
 
@@ -105,6 +113,7 @@ describe("project document service", () => {
       versionGroupId: "group-1",
     }));
     mocks.deleteDriveFile.mockResolvedValue(true);
+    mocks.setDriveFileTrashed.mockResolvedValue(true);
     mocks.getDriveFileContent.mockResolvedValue({ pipe: vi.fn() });
     mocks.transition.mockImplementation(
       async (id, _actor, _expected, status) => ({
@@ -292,5 +301,47 @@ describe("project document service", () => {
     );
     expect(mocks.deleteDriveFile).not.toHaveBeenCalled();
     expect(mocks.remove).not.toHaveBeenCalled();
+  });
+  it("stores optional display metadata separately from original file metadata", async () => {
+    await uploadProjectDocument("project-1", "OTHER", uploadedFile(), "user-1", null,
+      { title: "Site arrival", description: "North elevation" });
+    expect(mocks.createInitial.mock.calls[0]![0]).toMatchObject({
+      fileName: "site-plan.pdf", title: "Site arrival", description: "North elevation",
+    });
+    mocks.get.mockResolvedValueOnce({ id: "document-1", isLatest: true, status: "DRAFT" });
+    mocks.updateMetadata.mockResolvedValueOnce({ id: "document-1", googleDriveFileId: "drive-file-1",
+      fileName: "site-plan.pdf", title: "Arrival", description: null });
+    const changed = await updateDocumentMetadata("document-1", { title: "Arrival" }, "admin-1");
+    expect(changed.fileName).toBe("site-plan.pdf");
+    expect(mocks.updateMetadata).toHaveBeenCalledWith("document-1", "Arrival", undefined, "admin-1");
+    mocks.get.mockResolvedValueOnce({ id: "document-1", isLatest: true, status: "APPROVED" });
+    await expect(updateDocumentMetadata("document-1", { title: "Changed" }, "admin-1"))
+      .rejects.toThrow("Approved photo details cannot be edited");
+  });
+  it("trashes every photo revision before removing metadata, then permanently deletes files", async () => {
+    mocks.get.mockResolvedValueOnce({ id: "new", category: "IMAGES", versionGroupId: "group-1" });
+    mocks.history.mockResolvedValueOnce([
+      { id: "new", status: "DRAFT", googleDriveFileId: "file-2" },
+      { id: "old", status: "REJECTED", googleDriveFileId: "file-1" },
+    ]);
+    await deletePhotoHistory("new", "admin-1");
+    expect(mocks.setDriveFileTrashed).toHaveBeenCalledWith({}, "file-2", true);
+    expect(mocks.setDriveFileTrashed).toHaveBeenCalledWith({}, "file-1", true);
+    expect(mocks.removeVersionGroup).toHaveBeenCalledWith("group-1", ["new", "old"], "admin-1");
+    expect(mocks.deleteDriveFile).toHaveBeenCalledTimes(2);
+  });
+  it("restores staged Drive files if photo metadata deletion fails", async () => {
+    mocks.get.mockResolvedValueOnce({ id: "new", category: "IMAGES", versionGroupId: "group-1" });
+    mocks.history.mockResolvedValueOnce([{ id: "new", status: "DRAFT", googleDriveFileId: "file-2" }]);
+    mocks.removeVersionGroup.mockRejectedValueOnce(new Error("database unavailable"));
+    await expect(deletePhotoHistory("new", "admin-1")).rejects.toThrow("database unavailable");
+    expect(mocks.setDriveFileTrashed).toHaveBeenCalledWith({}, "file-2", false);
+    expect(mocks.deleteDriveFile).not.toHaveBeenCalled();
+  });
+  it("never stages an approved photo for deletion", async () => {
+    mocks.get.mockResolvedValueOnce({ id: "new", category: "IMAGES", versionGroupId: "group-1" });
+    mocks.history.mockResolvedValueOnce([{ id: "old", status: "APPROVED", googleDriveFileId: "file-1" }]);
+    await expect(deletePhotoHistory("new", "admin-1")).rejects.toThrow("Approved photos cannot be deleted");
+    expect(mocks.setDriveFileTrashed).not.toHaveBeenCalled();
   });
 });

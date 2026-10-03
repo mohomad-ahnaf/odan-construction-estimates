@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ChangePassword } from "./ChangePassword";
-import { api } from "../lib/api";
+import { api, ApiError } from "../lib/api";
 
-vi.mock("../lib/api", () => ({ api: vi.fn() }));
+vi.mock("../lib/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/api")>()), api: vi.fn(),
+}));
 const current = "c".repeat(20);
 const next = "n".repeat(20);
 
@@ -38,11 +40,11 @@ describe("change password form", () => {
   });
 
   it("shows a failed change without clearing the entered fields", async () => {
-    vi.mocked(api).mockRejectedValue(new Error("Invalid credentials"));
+    vi.mocked(api).mockRejectedValue(new ApiError(401, "Invalid credentials"));
     render(<ChangePassword />);
     fill();
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Invalid credentials",
+      "The current password could not be verified.",
     );
     expect(screen.getByLabelText("Current password")).toHaveValue(current);
     expect(screen.getByLabelText("New password")).toHaveValue(next);
@@ -73,5 +75,18 @@ describe("change password form", () => {
       expect(screen.getByText("Passwords do not match")).toBeInTheDocument(),
     );
     expect(api).not.toHaveBeenCalled();
+  });
+
+  it("uses password autocomplete and accessible visibility controls", () => {
+    render(<ChangePassword embedded />);
+    const currentInput = screen.getByLabelText("Current password");
+    const newInput = screen.getByLabelText("New password");
+    expect(currentInput).toHaveAttribute("autocomplete", "current-password");
+    expect(newInput).toHaveAttribute("autocomplete", "new-password");
+    expect(currentInput).toHaveAttribute("type", "password");
+    fireEvent.click(screen.getByRole("button", { name: "Show current password" }));
+    expect(currentInput).toHaveAttribute("type", "text");
+    fireEvent.click(screen.getByRole("button", { name: "Hide current password" }));
+    expect(currentInput).toHaveAttribute("type", "password");
   });
 });

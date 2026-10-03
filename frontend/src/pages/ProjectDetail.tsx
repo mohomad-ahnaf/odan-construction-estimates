@@ -8,6 +8,7 @@ import { NavigableRow } from "../components/NavigableRow";
 import { estimateDescription } from "../lib/estimateDescription";
 import { ProjectDocuments } from "../components/ProjectDocuments";
 import { PlanMeasurementWorkspace } from "../components/PlanMeasurementWorkspace";
+import { DesignerWorkspace } from "../components/DesignerWorkspace";
 import type { Client, ClientEstimate, Estimate, Page, Project } from "../types";
 
 export function ProjectDetail() {
@@ -17,7 +18,7 @@ export function ProjectDetail() {
   const requestedTab = searchParams.get("tab");
   const tab =
     requestedTab === "client-estimates" ||
-    ((requestedTab === "documents" || requestedTab === "plans") &&
+    ((requestedTab === "documents" || requestedTab === "plans" || requestedTab === "designer") &&
       session?.user?.role === "ADMIN")
       ? requestedTab
       : "estimates";
@@ -212,6 +213,8 @@ export function ProjectDetail() {
             >
               Plans
             </button>
+            <button type="button" role="tab" aria-selected={tab === "designer"}
+              onClick={() => setSearchParams({ tab: "designer" })}>3D Designer</button>
           </>
         )}
       </div>
@@ -447,7 +450,9 @@ export function ProjectDetail() {
           </div>
         </section>
       ) : tab === "documents" ? (
-        <ProjectDocuments projectId={id!} />
+        <ProjectDocuments projectId={id!} initialCategory={searchParams.get("category") === "IMAGES" ? "IMAGES" : undefined} />
+      ) : tab === "designer" ? (
+        <DesignerWorkspace projectId={id!} />
       ) : (
         <PlanMeasurementWorkspace projectId={id!} />
       )}

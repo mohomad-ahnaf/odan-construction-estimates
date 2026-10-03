@@ -1,22 +1,29 @@
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { useAuth } from "../auth";
+import { WorkspaceIcon } from "./WorkspaceIcon";
 export function Layout() {
   const { session, signOut } = useAuth();
   const [error, setError] = useState("");
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const { pathname } = useLocation();
   useEffect(() => {
     window.scrollTo(0, 0);
+    setMobileNavOpen(false);
   }, [pathname]);
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <a className="brand" href="/">
-          <img
-            src="/branding/odan-logo-transparent.png"
-            alt="Odan Construction"
-          />
-        </a>
+        <div className="sidebar-header">
+          <a className="brand" href="/">
+            <img src="/branding/odan-logo-transparent.png" alt="Odan Construction" />
+          </a>
+          <button type="button" className="sidebar-menu-toggle" aria-label={mobileNavOpen ? "Close navigation" : "Open navigation"}
+            aria-expanded={mobileNavOpen} aria-controls="sidebar-content" onClick={() => setMobileNavOpen((open) => !open)}>
+            <WorkspaceIcon name={mobileNavOpen ? "close" : "menu"} size={22} />
+          </button>
+        </div>
+        <div id="sidebar-content" className={`sidebar-content${mobileNavOpen ? " is-open" : ""}`}>
         <div className="nav-label">WORKSPACE</div>
         <nav aria-label="Main navigation">
           <NavLink to="/" end>
@@ -47,29 +54,33 @@ export function Layout() {
             <span className="nav-icon" aria-hidden="true">⇄</span>{" "}
             Unit Converter
           </NavLink>
+          {session?.user?.role === "ADMIN" && <NavLink to="/site-photos">
+            <span className="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7h3l1.5-2h7L17 7h3v12H4z"/><circle cx="12" cy="13" r="3.5"/></svg></span>{" "}
+            Site Photos
+          </NavLink>}
           {session?.user?.role === "ADMIN" && (
             <>
               <NavLink to="/audit">
                 <span className="nav-icon" aria-hidden="true">◷</span>{" "}Audit trail
               </NavLink>
-              <NavLink to="/settings/pdf-template">
-                <span className="nav-icon" aria-hidden="true">⚙</span>{" "}Settings
-              </NavLink>
             </>
           )}
+          <NavLink to="/settings">
+            <span className="nav-icon"><WorkspaceIcon name="settings" /></span>{" "}Settings
+          </NavLink>
         </nav>
         <div className="sidebar-bottom">
           <span className="avatar">{session?.user?.name.slice(0, 1)}</span>
           <strong>{session?.user?.name}</strong>
           <small>{session?.user?.role.toLowerCase()}</small>
-          <NavLink to="/account/password">Change password</NavLink>
           <button
             className="text-button"
             onClick={() => void signOut().catch((e) => setError(e.message))}
           >
-            Sign out →
+            <WorkspaceIcon name="signOut" size={16} /> Sign out
           </button>
           {error && <p role="alert">{error}</p>}
+        </div>
         </div>
       </aside>
       <main>

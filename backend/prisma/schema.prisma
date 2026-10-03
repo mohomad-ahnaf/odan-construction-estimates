@@ -54,6 +54,11 @@ enum MeasurementType {
   COUNT
 }
 
+enum DesignerReviewStatus {
+  DRAFT
+  REVIEWED
+}
+
 model User {
   id           String    @id @default(uuid())
   email        String    @unique
@@ -67,6 +72,7 @@ model User {
   planCalibrations PageCalibration[]
   planMeasurements PlanMeasurement[]
   planMeasurementGroups PlanMeasurementGroup[]
+  designerModels DesignerModel[]
   createdAt    DateTime  @default(now())
 }
 
@@ -107,6 +113,7 @@ model Project {
   estimates      Estimate[]
   clientEstimates ClientEstimate[]
   documents      Document[]
+  designerModel   DesignerModel?
 
   @@index([clientId, status])
 }
@@ -264,6 +271,8 @@ model Document {
   uploadedBy          String
   uploader            User             @relation(fields: [uploadedBy], references: [id], onDelete: Restrict)
   fileName            String
+  title               String?
+  description         String?
   fileType            String
   fileSize            Int
   category            DocumentCategory
@@ -285,6 +294,21 @@ model Document {
   @@index([projectId, isLatest, createdAt])
   @@index([uploadedBy])
   @@unique([versionGroupId, version])
+}
+
+model DesignerModel {
+  id          String               @id @default(uuid())
+  projectId   String               @unique
+  project     Project              @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  createdBy   String
+  creator     User                 @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+  name        String               @default("Ground floor")
+  floorHeightMeters Float          @default(3)
+  geometry    Json                 @default("{\"walls\":[],\"junctions\":[]}")
+  status      DesignerReviewStatus @default(DRAFT)
+  version     Int                  @default(1)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
 }
 
 model PageCalibration {

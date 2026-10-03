@@ -1,4 +1,4 @@
-import { Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "./auth";
 import { Layout } from "./components/Layout";
 import { Login } from "./pages/Login";
@@ -6,7 +6,6 @@ import { Estimates } from "./pages/Estimates";
 import { EstimateEditor } from "./pages/EstimateEditor";
 import { EstimateDetail } from "./pages/EstimateDetail";
 import { Audit } from "./pages/Audit";
-import { ChangePassword } from "./pages/ChangePassword";
 import { Dashboard } from "./pages/Dashboard";
 import { Clients } from "./pages/Clients";
 import { ClientEditor } from "./pages/ClientEditor";
@@ -16,8 +15,9 @@ import { ProjectDetail } from "./pages/ProjectDetail";
 import { Projects } from "./pages/Projects";
 import { ClientEstimateEditor } from "./pages/ClientEstimateEditor";
 import { ClientEstimateDetail } from "./pages/ClientEstimateDetail";
-import { PdfTemplateSettings } from "./pages/PdfTemplateSettings";
+import { Settings } from "./pages/Settings";
 import { UnitConverter } from "./pages/UnitConverter";
+import { SitePhotos } from "./pages/SitePhotos";
 export function App() {
   const { session, loading, error, refresh } = useAuth();
   if (loading)
@@ -72,11 +72,13 @@ export function App() {
           path="/client-estimates/:id"
           element={<ClientEstimateDetail />}
         />
-        <Route path="/account/password" element={<ChangePassword />} />
+        <Route path="/settings" element={<Settings />} />
+        <Route path="/account/password" element={<Navigate to="/settings?section=account" replace />} />
         {session.user.role === "ADMIN" && (
           <>
+            <Route path="/site-photos" element={<SitePhotos />} />
             <Route path="/audit" element={<Audit />} />
-            <Route path="/settings/pdf-template" element={<PdfTemplateSettings />} />
+            <Route path="/settings/pdf-template" element={<Navigate to="/settings?section=pdf" replace />} />
           </>
         )}
         <Route

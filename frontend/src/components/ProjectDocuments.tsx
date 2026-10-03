@@ -286,9 +286,10 @@ function DropZone({
   );
 }
 
-export function ProjectDocuments({ projectId }: { projectId: string }) {
+export function ProjectDocuments({ projectId, initialCategory }: { projectId: string; initialCategory?: DocumentCategory }) {
   const cache = useQueryClient();
-  const [filter, setFilter] = useState<"ALL" | DocumentCategory>("ALL");
+  const [filter, setFilter] = useState<"ALL" | DocumentCategory>(initialCategory ?? "ALL");
+  useEffect(() => { if (initialCategory) setFilter(initialCategory); }, [initialCategory]);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [category, setCategory] = useState<DocumentCategory>("DRAWINGS");
   const [uploadQueue, setUploadQueue] = useState<UploadQueueItem[]>([]);

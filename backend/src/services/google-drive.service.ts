@@ -317,6 +317,20 @@ export async function deleteDriveFile(
   }
 }
 
+export async function setDriveFileTrashed(
+  drive: drive_v3.Drive,
+  fileId: string,
+  trashed: boolean,
+) {
+  try {
+    await drive.files.update({ fileId, requestBody: { trashed }, fields: "id,trashed" });
+    return true;
+  } catch (error) {
+    if (googleStatus(error) === 404 && trashed) return false;
+    driveFailure(error, trashed ? "trash the file" : "restore the file");
+  }
+}
+
 export async function getDriveFileMetadata(
   drive: drive_v3.Drive,
   fileId: string,

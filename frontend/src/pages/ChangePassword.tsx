@@ -2,7 +2,8 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { api } from "../lib/api";
+import { api, ApiError } from "../lib/api";
+import { WorkspaceIcon } from "../components/WorkspaceIcon";
 
 const schema = z
   .object({
@@ -23,9 +24,10 @@ const schema = z
   });
 type FormValues = z.infer<typeof schema>;
 
-export function ChangePassword() {
+export function ChangePassword({ embedded = false }: { embedded?: boolean }) {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [visible, setVisible] = useState({ current: false, next: false, confirm: false });
   const {
     register,
     handleSubmit,
@@ -33,9 +35,9 @@ export function ChangePassword() {
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({ resolver: zodResolver(schema) });
   return (
-    <section className="account-page">
-      <span className="eyebrow">ACCOUNT SECURITY</span>
-      <h1>Change password</h1>
+    <section className={`account-page${embedded ? " account-page-embedded" : ""}`}>
+      {!embedded && <span className="eyebrow">ACCOUNT SECURITY</span>}
+      {embedded ? <h3>Change password</h3> : <h1>Change password</h1>}
       <p className="muted">
         Use a unique password of 16 to 128 characters. Other signed-in sessions
         will end after you save it.
@@ -54,47 +56,78 @@ export function ChangePassword() {
               newPassword: "",
               confirmPassword: "",
             });
+            setVisible({ current: false, next: false, confirm: false });
             setMessage(
               "Password changed. Other sessions have been signed out.",
             );
           } catch (cause) {
-            setError((cause as Error).message);
+            setError(cause instanceof ApiError && cause.status === 401 ?
+              "The current password could not be verified." :
+              cause instanceof ApiError && cause.status === 403 ?
+                "Your session could not be verified. Refresh and try again." :
+                cause instanceof ApiError && cause.status === 429 ?
+                  "Too many attempts. Try again later." :
+                  "Could not change password. Please try again.");
           }
         })}
       >
-        <label>
-          Current password
+        <div className="password-form-field">
+          <label htmlFor="current-password">Current password</label>
+          <div className="password-input-wrap">
           <input
-            type="password"
+            id="current-password"
+            type={visible.current ? "text" : "password"}
             autoComplete="current-password"
+            aria-invalid={!!errors.currentPassword}
+            aria-describedby={errors.currentPassword ? "current-password-error" : undefined}
             {...register("currentPassword")}
           />
+          <button type="button" className="password-visibility" aria-label={visible.current ? "Hide current password" : "Show current password"}
+            title={visible.current ? "Hide current password" : "Show current password"} aria-pressed={visible.current}
+            onClick={() => setVisible((value) => ({ ...value, current: !value.current }))}>
+            <WorkspaceIcon name={visible.current ? "eyeOff" : "eye"} /></button></div>
           {errors.currentPassword && (
-            <small role="alert">{errors.currentPassword.message}</small>
+            <small id="current-password-error" role="alert">{errors.currentPassword.message}</small>
           )}
-        </label>
-        <label>
-          New password
+        </div>
+        <div className="password-form-field">
+          <label htmlFor="new-password">New password</label>
+          <div className="password-input-wrap">
           <input
-            type="password"
+            id="new-password"
+            type={visible.next ? "text" : "password"}
             autoComplete="new-password"
+            aria-invalid={!!errors.newPassword}
+            aria-describedby={errors.newPassword ? "new-password-error" : undefined}
             {...register("newPassword")}
           />
+          <button type="button" className="password-visibility" aria-label={visible.next ? "Hide new password" : "Show new password"}
+            title={visible.next ? "Hide new password" : "Show new password"} aria-pressed={visible.next}
+            onClick={() => setVisible((value) => ({ ...value, next: !value.next }))}>
+            <WorkspaceIcon name={visible.next ? "eyeOff" : "eye"} /></button></div>
           {errors.newPassword && (
-            <small role="alert">{errors.newPassword.message}</small>
+            <small id="new-password-error" role="alert">{errors.newPassword.message}</small>
           )}
-        </label>
-        <label>
-          Confirm new password
+        </div>
+        <div className="password-form-field">
+          <label htmlFor="confirm-password">Confirm new password</label>
+          <div className="password-input-wrap">
           <input
-            type="password"
+            id="confirm-password"
+            type={visible.confirm ? "text" : "password"}
             autoComplete="new-password"
+            aria-invalid={!!errors.confirmPassword}
+            aria-describedby={errors.confirmPassword ? "confirm-password-error" : undefined}
             {...register("confirmPassword")}
           />
+          <button type="button" className="password-visibility" aria-label={visible.confirm ? "Hide confirm new password" : "Show confirm new password"}
+            title={visible.confirm ? "Hide confirm new password" : "Show confirm new password"} aria-pressed={visible.confirm}
+            onClick={() => setVisible((value) => ({ ...value, confirm: !value.confirm }))}>
+            <WorkspaceIcon name={visible.confirm ? "eyeOff" : "eye"} /></button></div>
           {errors.confirmPassword && (
-            <small role="alert">{errors.confirmPassword.message}</small>
+            <small id="confirm-password-error" role="alert">{errors.confirmPassword.message}</small>
           )}
-        </label>
+        </div>
         {error && (
           <p role="alert" className="error">
             {error}

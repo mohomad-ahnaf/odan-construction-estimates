@@ -29,7 +29,7 @@ const readImage = (file: File) => new Promise<string>((resolve, reject) => {
   reader.readAsDataURL(file);
 });
 
-export function PdfTemplateSettings() {
+export function PdfTemplateSettings({ embedded = false }: { embedded?: boolean }) {
   const query = useQuery({ queryKey: ["pdf-template-settings"], queryFn: () => api<Settings>("/settings/pdf-template") });
   const { register, reset, setValue, watch, getValues, handleSubmit, formState: { isSubmitting } } = useForm<Settings>();
   const [message, setMessage] = useState("");
@@ -70,7 +70,8 @@ export function PdfTemplateSettings() {
   if (query.isPending) return <p>Loading PDF template settings…</p>;
   if (query.isError) return <p role="alert">{query.error.message}</p>;
   return <div className="pdf-settings-page">
-    <div className="page-heading"><div><h1>PDF Template Settings</h1><p className="muted">Customize Construction Estimate PDFs. Changes apply to future downloads, including existing estimates.</p></div></div>
+    {!embedded && <div className="page-heading"><div><h1>PDF Template Settings</h1><p className="muted">Customize Construction Estimate PDFs. Changes apply to future downloads, including existing estimates.</p></div></div>}
+    {embedded && <p className="muted pdf-settings-intro">Changes apply to future downloads, including existing estimates.</p>}
     <form onSubmit={save}>
       <section className="pdf-settings-section"><h2>Company details</h2><div className="pdf-settings-grid">
         <label>Company name<input required maxLength={120} {...register("companyName")} /></label>

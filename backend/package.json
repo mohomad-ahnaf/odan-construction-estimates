@@ -8,7 +8,7 @@
     "dev:watch": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "test": "vitest run",
+    "test": "node ../node_modules/vitest/vitest.mjs run",
     "db:generate": "node scripts/prisma.mjs generate",
     "db:migrate": "node scripts/prisma.mjs migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
@@ -17,7 +17,7 @@
     "reconcile:report": "tsx scripts/reconcile-estimates.ts report",
     "reconcile:preview": "tsx scripts/reconcile-estimates.ts preview",
     "reconcile:apply": "tsx scripts/reconcile-estimates.ts apply",
-    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:integration": "node ../node_modules/vitest/vitest.mjs run --config vitest.integration.config.ts",
     "test:drive": "tsx scripts/test-google-drive.ts"
   },
   "dependencies": {

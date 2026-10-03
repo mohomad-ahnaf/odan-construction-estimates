@@ -14,6 +14,10 @@ declare global {
   }
 }
 export const cookieName = "odan_estimates_session";
+export function isAllowedCsrfOrigin(origin: string | undefined, localOrigin: string,
+  tunnelOrigin?: string) {
+  return origin === localOrigin || (!!tunnelOrigin && origin === tunnelOrigin);
+}
 export const cookieOptions = {
   httpOnly: true,
   secure: config.NODE_ENV === "production",
@@ -39,7 +43,7 @@ export const csrf: RequestHandler = (req, _res, next) => {
   const token = req.get("x-csrf-token");
   const expected = req.session?.csrfToken;
   if (
-    req.get("origin") !== config.ODAN_ORIGIN ||
+    !isAllowedCsrfOrigin(req.get("origin"), config.ODAN_ORIGIN, config.ODAN_TUNNEL_ORIGIN) ||
     !token ||
     !expected ||
     Buffer.byteLength(token) !== Buffer.byteLength(expected) ||

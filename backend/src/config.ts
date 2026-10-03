@@ -1,4 +1,5 @@
 import dotenv from "dotenv";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 // Read this application's configuration only; never search parent directories.
@@ -7,6 +8,13 @@ const local =
     path: fileURLToPath(new URL("../.env", import.meta.url)),
     quiet: true,
   }).parsed ?? {};
+let tunnel: Record<string, string> = {};
+try {
+  tunnel = dotenv.parse(readFileSync(fileURLToPath(new URL("../../.env.local", import.meta.url))));
+} catch (error) {
+  if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+}
+const tunnelOrigin = process.env.ODAN_TUNNEL_ORIGIN ?? tunnel.ODAN_TUNNEL_ORIGIN;
 export const config = z
   .object({
     NODE_ENV: z
@@ -26,6 +34,12 @@ export const config = z
       }, "Use PostgreSQL at localhost:5432 with the dedicated odan_estimation database"),
     ODAN_PORT: z.coerce.number().int().min(1024).max(65535).default(43188),
     ODAN_ORIGIN: z.string().url().default("http://127.0.0.1:43187"),
+    ODAN_TUNNEL_ORIGIN: z.string().url().refine((value) => {
+      const url = new URL(value);
+      return url.protocol === "https:" && url.pathname === "/" && !url.search && !url.hash &&
+        !url.username && !url.password;
+    }, "Use one exact HTTPS frontend origin without a path, query, or credentials")
+      .transform((value) => new URL(value).origin).optional(),
     ODAN_PDF_LAUNCH_TIMEOUT_MS: z.coerce
       .number()
       .int()
@@ -36,4 +50,4 @@ export const config = z
     GOOGLE_CLIENT_SECRET: z.string().min(1),
     GOOGLE_REDIRECT_URI: z.string().url(),
   })
-  .parse(local);
+  .parse({ ...local, ODAN_TUNNEL_ORIGIN: tunnelOrigin || undefined });

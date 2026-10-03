@@ -18,6 +18,17 @@ export const revisionNoteSchema = z
   .optional()
   .transform((value) => value || null);
 
+export const documentMetadataSchema = z.object({
+  title: z.string().trim().max(160, "Title must be 160 characters or fewer").nullable().optional(),
+  description: z.string().trim().max(1000, "Description must be 1000 characters or fewer").nullable().optional(),
+}).strict().refine((value) => value.title !== undefined || value.description !== undefined,
+  "Provide a title or description");
+
+export const uploadMetadataSchema = z.object({
+  title: z.string().trim().max(160).optional(),
+  description: z.string().trim().max(1000).optional(),
+});
+
 export const approvalCommentSchema = z
   .object({ comment: z.string().trim().max(1000).optional() })
   .strict();

@@ -74,6 +74,27 @@ npm run db:seed
 
 `npm run dev` serves the frontend at `127.0.0.1:43187` and API at `127.0.0.1:43188`. Frontend changes reload automatically; restart the combined command after backend changes. Integration and browser tests require the configured database; browser tests also require Chrome or Chromium. Stop `npm run dev` before running `test:e2e` because Playwright starts its own servers.
 
+## Test on a phone through VS Code port forwarding
+
+Forward **only port 43187** in VS Code's **Ports** panel and copy its HTTPS forwarded URL. Keep the forwarded port private to your VS Code account. The backend stays on local `127.0.0.1:43188`; Vite proxies the existing relative `/api` routes to it, including authentication, private images, and uploads.
+
+After you receive the forwarded frontend URL, create this project's ignored `.env.local` in the repository root from Command Prompt:
+
+```cmd
+cd /d "F:\Odan Construction\Estimation Web\odan-construction-estimates"
+notepad .env.local
+```
+
+Put **one exact HTTPS origin** in the file, replacing the placeholder with the URL VS Code gave you. Include its hostname and port if the URL has one, but no path, query, or fragment:
+
+```dotenv
+ODAN_TUNNEL_ORIGIN=https://YOUR-EXACT-FORWARDED-FRONTEND-HOST
+```
+
+Restart `npm run dev` after saving `.env.local`, then open the forwarded frontend URL on your phone and sign in. If VS Code assigns a different URL later, update this one value and restart. The local desktop URL `http://127.0.0.1:43187` continues to work. Vite permits only the configured forwarded hostname, and the backend's CSRF check accepts only that exact forwarded origin and the existing local origin. `.env.local` is ignored by Git and must not contain database credentials or Google tokens. A Google Drive connection already established on the desktop works for phone uploads; reconnecting Google OAuth from the phone still uses the configured local callback and should be done on the desktop.
+
+VS Code Dev Tunnels can rewrite a phone request's `Origin` to localhost before Vite receives it. In development, the Vite API proxy restores the configured HTTPS origin only when the forwarded host, HTTPS indicator, and same-origin browser evidence match. The backend still validates that exact origin and the session CSRF token. If sign-in reports an invalid verification token after a tunnel URL changes, update `.env.local`, restart the dev servers, and refresh the phone page.
+
 ## Recover access to an existing account
 
 From Command Prompt in this repository, run:

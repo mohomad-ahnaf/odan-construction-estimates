@@ -6,6 +6,7 @@ import type {
   DocumentStatus,
 } from "@prisma/client";
 import { AppError } from "../middleware/errors.js";
+import { logger } from "../logger.js";
 import { maximumDocumentBytes } from "../middleware/document-upload.js";
 import { documentRepository } from "../repositories/document.repository.js";
 import {
@@ -15,6 +16,7 @@ import {
   getAuthenticatedDriveClient,
   getDriveFileContent,
   getDriveFileMetadata,
+  setDriveFileTrashed,
   uploadDriveFile,
   type DriveFolderName,
 } from "./google-drive.service.js";
@@ -40,6 +42,8 @@ const categoryFolders: Record<DocumentCategory, DriveFolderName> = {
   REPORTS: "Reports",
   OTHER: "Other",
 };
+
+type DisplayMetadata = { title?: string | null; description?: string | null };
 
 export function validateDocumentFile(file: Express.Multer.File) {
   if (!file.size || file.size > maximumDocumentBytes)
@@ -67,6 +71,7 @@ export async function uploadProjectDocument(
   file: Express.Multer.File,
   actorId: string,
   revisionNote: string | null = null,
+  metadata: DisplayMetadata = {},
 ) {
   const validated = validateDocumentFile(file);
   const project = await documentRepository.findProject(projectId);
@@ -99,6 +104,7 @@ export async function uploadProjectDocument(
       projectId,
       uploadedBy: actorId,
       fileName: validated.fileName,
+      ...metadata,
       fileType: validated.mimeType,
       fileSize: file.size,
       category,
@@ -190,6 +196,44 @@ export async function getDocumentVersions(id: string) {
   return (await documentRepository.history(document.versionGroupId)).map(
     serializeDocument,
   );
+}
+
+export async function updateDocumentMetadata(id: string, metadata: DisplayMetadata, actorId: string) {
+  const document = await documentRepository.get(id);
+  if (!document) throw new AppError(404, "Document not found");
+  if (!document.isLatest) throw new AppError(409, "Only the latest revision can be edited");
+  if (document.status === "APPROVED") throw new AppError(409, "Approved photo details cannot be edited");
+  return serializeDocument(await documentRepository.updateMetadata(id,
+    metadata.title === "" ? null : metadata.title,
+    metadata.description === "" ? null : metadata.description, actorId));
+}
+
+export async function deletePhotoHistory(id: string, actorId: string) {
+  const document = await documentRepository.get(id);
+  if (!document || document.category !== "IMAGES") throw new AppError(404, "Photo not found");
+  const versions = await documentRepository.history(document.versionGroupId);
+  if (versions.some((version) => version.status === "APPROVED"))
+    throw new AppError(409, "Approved photos cannot be deleted");
+  const drive = await getAuthenticatedDriveClient();
+  const staged: string[] = [];
+  try {
+    for (const version of versions) {
+      if (await setDriveFileTrashed(drive, version.googleDriveFileId, true))
+        staged.push(version.googleDriveFileId);
+    }
+    await documentRepository.removeVersionGroup(document.versionGroupId,
+      versions.map((version) => version.id), actorId);
+  } catch (error) {
+    const restored = await Promise.allSettled(staged.map((fileId) =>
+      setDriveFileTrashed(drive, fileId, false)));
+    if (restored.some((result) => result.status === "rejected"))
+      logger.error({ documentId: id }, "Photo deletion rollback needs Drive recovery");
+    throw error;
+  }
+  for (const fileId of staged) {
+    try { await deleteDriveFile(drive, fileId); }
+    catch { logger.warn({ documentId: id, fileId }, "Trashed photo file awaits permanent deletion"); }
+  }
 }
 
 async function transitionDocument(

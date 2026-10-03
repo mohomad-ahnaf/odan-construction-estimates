@@ -7,6 +7,7 @@ import * as clientEstimates from "../controllers/client-estimate.controller.js";
 import * as pdfTemplateSettings from "../controllers/pdf-template-settings.controller.js";
 import * as documents from "../controllers/document.controller.js";
 import * as planMeasurements from "../controllers/plan-measurement.controller.js";
+import * as designer from "../controllers/designer.controller.js";
 import { requireAuth, allow } from "../middleware/auth.js";
 import { documentUpload } from "../middleware/document-upload.js";
 export const routes = Router();
@@ -59,6 +60,10 @@ routes.get("/clients/:id/estimates", clients.estimates);
 routes.get("/clients/:id/activity", allow("ADMIN"), clients.activity);
 routes.get("/projects", clients.listProjects);
 routes.get("/projects/:id", clients.getProject);
+routes.get("/projects/:projectId/designer", allow("ADMIN"), designer.get);
+routes.post("/projects/:projectId/designer", allow("ADMIN"), designer.create);
+routes.put("/projects/:projectId/designer", allow("ADMIN"), designer.save);
+routes.post("/projects/:projectId/designer/review", allow("ADMIN"), designer.review);
 routes.get(
   "/projects/:projectId/plans",
   allow("ADMIN"),
@@ -149,6 +154,8 @@ routes.patch(
 routes.get("/estimates", estimates.list);
 routes.get("/documents/:id/content", allow("ADMIN"), documents.content);
 routes.get("/documents/:id", allow("ADMIN"), documents.get);
+routes.patch("/documents/:id/metadata", allow("ADMIN"), documents.updateMetadata);
+routes.delete("/documents/:id/photo-history", allow("ADMIN"), documents.removePhotoHistory);
 routes.get("/documents/:id/versions", allow("ADMIN"), documents.versions);
 routes.get(
   "/documents/:id/approval-history",

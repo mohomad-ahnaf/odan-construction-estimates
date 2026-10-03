@@ -152,6 +152,8 @@ export type ProjectDocument = {
   projectId: string;
   uploadedBy: string;
   fileName: string;
+  title: string | null;
+  description: string | null;
   fileType: string;
   fileSize: number;
   category: DocumentCategory;
@@ -240,6 +242,44 @@ export type PlanPageWorkspace = {
   document: Pick<PlanDocument, "id" | "projectId" | "fileName" | "fileType" | "version" | "status">;
   calibration: PageCalibration | null;
   measurements: PlanMeasurement[];
+};
+export type DesignerFace = {
+  side: "A" | "B"; roomName: string | null;
+  plaster: boolean; plasterHeightMeters: number | null;
+  paint: boolean; paintHeightMeters: number | null;
+};
+export type DesignerOpening = {
+  id: string; type: "DOOR" | "WINDOW"; label: string;
+  positionMeters: number; widthMeters: number; heightMeters: number; sillMeters: number;
+};
+export type DesignerWall = {
+  id: string; label: string;
+  startX: number; startY: number; endX: number; endY: number;
+  heightMeters: number; thicknessMeters: number;
+  alignment: "CENTRELINE" | "INSIDE" | "OUTSIDE";
+  faces: [DesignerFace, DesignerFace]; openings: DesignerOpening[];
+};
+export type DesignerJunction = {
+  id: string; continuousWallId: string; adjoiningWallId: string; adjoiningEnd: "START" | "END";
+};
+export type DesignerModel = {
+  id: string; projectId: string; name: string; floorHeightMeters: number;
+  version: number; status: "DRAFT" | "REVIEWED";
+  walls: DesignerWall[]; junctions: DesignerJunction[];
+  quantities: {
+    convention: string; issues: string[];
+    walls: {
+      id: string; label: string; lengthMeters: number; grossArea: number;
+      openingDeduction: number; junctionDeduction: number; netMasonryArea: number; masonryVolume: number;
+      faces: { side: "A" | "B"; roomName: string | null;
+        plaster: { grossArea: number; openingDeduction: number; junctionDeduction: number; netArea: number };
+        paint: { grossArea: number; openingDeduction: number; junctionDeduction: number; netArea: number };
+      }[];
+    }[];
+    totals: { grossArea: number; openingDeduction: number; junctionDeduction: number;
+      netMasonryArea: number; masonryVolume: number; plasterArea: number; paintArea: number;
+      walls: number; doors: number; windows: number };
+  };
 };
 export type Dashboard = {
   activeProjects: number;
