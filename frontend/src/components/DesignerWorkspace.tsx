@@ -99,6 +99,8 @@ export function DesignerWorkspace({ projectId }: { projectId: string }) {
   const [dialogError, setDialogError] = useState("");
   const [tool, setTool] = useState<DesignerTool>("SELECT");
   const [view, setView] = useState<"TOP" | "3D">("TOP");
+  const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
+  const [propertiesOpen, setPropertiesOpen] = useState(() => !window.matchMedia?.("(max-width: 850px)").matches);
   const [units, setUnits] = useState<"METRIC" | "IMPERIAL">("METRIC");
   const [axisLock, setAxisLock] = useState<"FREE" | "HORIZONTAL" | "VERTICAL">("FREE");
   const [fitSignal, setFitSignal] = useState(0);
@@ -133,6 +135,13 @@ export function DesignerWorkspace({ projectId }: { projectId: string }) {
     setWalls(model.walls); setJunctions(model.junctions); setName(model.name);
     setFloorHeight(model.floorHeightMeters); setUndo([]); setRedo([]);
   }, [model, dirty]);
+  useEffect(() => {
+    if (!window.matchMedia) return;
+    const media = window.matchMedia("(max-width: 850px)");
+    const update = () => setPropertiesOpen(!media.matches);
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
   useEffect(() => {
     if (!dirty && !hasDraft) return;
     const guard = (event: BeforeUnloadEvent) => event.preventDefault();
@@ -281,7 +290,10 @@ export function DesignerWorkspace({ projectId }: { projectId: string }) {
     {!model ? <div className="panel designer-empty"><h3>Start your first floor</h3><p>Create a model, choose Wall, then drag on the grid. Enter the exact dimensions before placing it.</p>
       <button className="primary" disabled={saving} onClick={() => void create()}>Create 3D model</button></div> : <>
       <div className="designer-layout">
-        <aside className="panel designer-tools"><h3>Tools</h3>
+        <aside className={`panel designer-tools${mobileToolsOpen ? " is-open" : ""}`}>
+          <button type="button" className="designer-mobile-tools-toggle" aria-expanded={mobileToolsOpen}
+            onClick={() => setMobileToolsOpen((open) => !open)}>Tools · {tool === "PAN" ? "Pan / Orbit" : tool.toLowerCase()} <span aria-hidden="true">{mobileToolsOpen ? "▴" : "▾"}</span></button>
+          <h3>Tools</h3>
           {([ ["SELECT", "↖", "Select"], ["WALL", "▰", "Wall"], ["DOOR", "▯", "Door"],
             ["WINDOW", "▤", "Window"], ["PAN", "✥", "Pan / Orbit"] ] as const).map(([id, icon, label]) =>
             <button key={id} type="button" className={tool === id ? "active" : ""} aria-pressed={tool === id}
@@ -290,7 +302,7 @@ export function DesignerWorkspace({ projectId }: { projectId: string }) {
               onClick={() => chooseTool(id)}><span aria-hidden="true">{icon}</span>{label}</button>)}
           {tool === "WALL" && <label>Direction <select value={axisLock} onChange={(event) => setAxisLock(event.target.value as typeof axisLock)}>
             <option value="FREE">Free angle</option><option value="HORIZONTAL">Horizontal</option><option value="VERTICAL">Vertical</option></select></label>}
-          <p>{tool === "WALL" ? "Drag from start to end. Grid snaps to 0.25 m; nearby wall endpoints snap automatically. Exact length is entered next." :
+          <p>{tool === "WALL" ? "Drag from start to end, or tap a start and end point. Grid snaps to 0.25 m; nearby wall endpoints snap automatically. Exact length is entered next." :
             tool === "DOOR" || tool === "WINDOW" ? "Drag onto a wall in Top View, or select this tool and click a wall. Opening distance is measured from the wall start to its near edge." :
             tool === "PAN" ? "Drag to pan Top View. Orbit, zoom and pan directly in 3D View." : "Select a wall or opening to edit it."}</p>
         </aside>
@@ -307,7 +319,7 @@ export function DesignerWorkspace({ projectId }: { projectId: string }) {
               }} />}
           {!walls.length && <p className="designer-canvas-tip">Choose Wall and drag across the grid to create your first wall.</p>}
         </div>
-        <aside className="panel designer-properties"><details open><summary>Properties</summary>
+        <aside className="panel designer-properties"><details open={propertiesOpen} onToggle={(event) => setPropertiesOpen(event.currentTarget.open)}><summary>Properties</summary>
           <label>Model name<input value={name} maxLength={100} onChange={(event) => { change({ ...snapshot(), name: event.target.value }); }} /></label>
           <Scalar label="Floor height" value={floorHeightMeters} unit={units} onChange={(value) => change({ ...snapshot(), floorHeightMeters: value })} />
           {selectedWall ? <><h3>{selectedWall.label}</h3><p>Length {length(modelDistance({ x: selectedWall.startX, y: selectedWall.startY },

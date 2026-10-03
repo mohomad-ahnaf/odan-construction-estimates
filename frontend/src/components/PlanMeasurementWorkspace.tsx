@@ -151,6 +151,7 @@ function PlanOverlay({
   onPanStart,
   onPanMove,
   onPanEnd,
+  onGesture,
   selectedMeasurementId,
   onSelectMeasurement,
 }: {
@@ -166,19 +167,64 @@ function PlanOverlay({
   onPanStart: (event: ReactPointerEvent<SVGSVGElement>) => void;
   onPanMove: (event: ReactPointerEvent<SVGSVGElement>) => void;
   onPanEnd: (event: ReactPointerEvent<SVGSVGElement>) => void;
+  onGesture: (scale: number, deltaX: number, deltaY: number) => void;
   selectedMeasurementId: string | null;
   onSelectMeasurement: (id: string | null) => void;
 }) {
+  const touches = useRef(new Map<number, { x: number; y: number }>());
+  const gesture = useRef<{ distance: number; x: number; y: number } | null>(null);
+  const suppressClickUntil = useRef(0);
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
   return (
     <svg
       ref={svgRef}
       className={`plan-overlay plan-tool-${tool.toLowerCase()}`}
       viewBox={`0 0 ${width} ${height}`}
-      onPointerDown={onPanStart}
-      onPointerMove={onPanMove}
-      onPointerUp={onPanEnd}
-      onPointerCancel={onPanEnd}
+      onPointerDown={(event) => {
+        if (event.pointerType === "touch") {
+          if (!touches.current.size) suppressClickUntil.current = 0;
+          touches.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+          touchStart.current = { x: event.clientX, y: event.clientY };
+          if (touches.current.size > 1) {
+            onPanEnd(event);
+            suppressClickUntil.current = Date.now() + 500;
+            const [a, b] = [...touches.current.values()];
+            gesture.current = { distance: Math.hypot(a!.x - b!.x, a!.y - b!.y), x: (a!.x + b!.x) / 2, y: (a!.y + b!.y) / 2 };
+            return;
+          }
+        }
+        onPanStart(event);
+      }}
+      onPointerMove={(event) => {
+        if (event.pointerType === "touch" && touches.current.has(event.pointerId)) {
+          touches.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+          if (touches.current.size > 1) {
+            const [a, b] = [...touches.current.values()];
+            const next = { distance: Math.hypot(a!.x - b!.x, a!.y - b!.y), x: (a!.x + b!.x) / 2, y: (a!.y + b!.y) / 2 };
+            if (gesture.current && next.distance > 0) onGesture(next.distance / gesture.current.distance, next.x - gesture.current.x, next.y - gesture.current.y);
+            gesture.current = next;
+            suppressClickUntil.current = Date.now() + 500;
+            return;
+          }
+          if (touchStart.current && Math.hypot(event.clientX - touchStart.current.x, event.clientY - touchStart.current.y) > 8)
+            suppressClickUntil.current = Date.now() + 500;
+          if (gesture.current) return;
+        }
+        onPanMove(event);
+      }}
+      onPointerUp={(event) => {
+        touches.current.delete(event.pointerId);
+        if (!touches.current.size) gesture.current = null;
+        onPanEnd(event);
+      }}
+      onPointerCancel={(event) => {
+        touches.current.delete(event.pointerId);
+        suppressClickUntil.current = Date.now() + 500;
+        if (!touches.current.size) gesture.current = null;
+        onPanEnd(event);
+      }}
       onClick={(event) => {
+        if (Date.now() < suppressClickUntil.current) return;
         if (tool === "PAN") return;
         if (tool === "SELECT") {
           onSelectMeasurement(null);
@@ -203,6 +249,7 @@ function PlanOverlay({
         const color = measurementGroupColor(measurement.groupId);
         const selected = selectedMeasurementId === measurement.id;
         const selectMeasurement = (event: { stopPropagation(): void }) => {
+          if (Date.now() < suppressClickUntil.current) return;
           if (tool !== "SELECT") return;
           event.stopPropagation();
           onSelectMeasurement(measurement.id);
@@ -261,6 +308,7 @@ export function PlanMeasurementWorkspace({ projectId }: { projectId: string }) {
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [rotation, setRotation] = useState<Rotation>(0);
   const [tool, setTool] = useState<Tool>("PAN");
+  const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
   const [draft, setDraft] = useState<PlanPoint[]>([]);
   const [draftLabel, setDraftLabel] = useState("");
   const [unit, setUnit] = useState<"mm" | "cm" | "m" | "ft" | "in">("m");
@@ -894,7 +942,7 @@ export function PlanMeasurementWorkspace({ projectId }: { projectId: string }) {
       </div>
 
       <div className="plan-layout">
-        <aside className="panel plan-tools">
+        <aside className={`panel plan-tools${mobileToolsOpen ? " is-open" : ""}`}>
           <div className="plan-group-picker">
             <label>
               Measurement group
@@ -937,6 +985,10 @@ export function PlanMeasurementWorkspace({ projectId }: { projectId: string }) {
             {groups.isError && <p className="error" role="alert">{groups.error.message}</p>}
             {groupError && <p className="error" role="alert">{groupError}</p>}
           </div>
+          <button type="button" className="plan-mobile-tools-toggle" aria-expanded={mobileToolsOpen}
+            onClick={() => setMobileToolsOpen((open) => !open)}>
+            Measurement tools · {toolDetails[tool].label} <span aria-hidden="true">{mobileToolsOpen ? "▴" : "▾"}</span>
+          </button>
           <h2>Measurement tools</h2>
           <div className="plan-tool-buttons">
             {(["PAN", "SELECT", "SCALE", ...(page.data?.calibration ? ["CHECK"] : []), "LENGTH", "AREA", "COUNT"] as Tool[]).map((value) => (
@@ -1045,8 +1097,12 @@ export function PlanMeasurementWorkspace({ projectId }: { projectId: string }) {
                       });
                     }}
                     onPanEnd={(event) => {
-                      if (panStart.current) event.currentTarget.releasePointerCapture(event.pointerId);
+                      if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
                       panStart.current = null;
+                    }}
+                    onGesture={(scale, deltaX, deltaY) => {
+                      setZoom((value) => Math.min(5, Math.max(.25, value * Math.min(1.3, Math.max(.77, scale)))));
+                      setPan((value) => ({ x: value.x + deltaX, y: value.y + deltaY }));
                     }}
                     selectedMeasurementId={selectedMeasurementId}
                     onSelectMeasurement={setSelectedMeasurementId}

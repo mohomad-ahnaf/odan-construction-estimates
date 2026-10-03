@@ -1,29 +1,66 @@
 import { NavLink, Outlet, useLocation } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../auth";
 import { WorkspaceIcon } from "./WorkspaceIcon";
 export function Layout() {
   const { session, signOut } = useAuth();
   const [error, setError] = useState("");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const drawerRef = useRef<HTMLDivElement>(null);
   const { pathname } = useLocation();
   useEffect(() => {
     window.scrollTo(0, 0);
     setMobileNavOpen(false);
   }, [pathname]);
+  useEffect(() => {
+    if (!window.matchMedia) return;
+    const mobile = window.matchMedia("(max-width: 700px), (max-width: 950px) and (max-height: 500px) and (pointer: coarse)");
+    const closeOnDesktop = () => { if (!mobile.matches) setMobileNavOpen(false); };
+    mobile.addEventListener("change", closeOnDesktop);
+    return () => mobile.removeEventListener("change", closeOnDesktop);
+  }, []);
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    drawerRef.current?.querySelector<HTMLElement>("nav a")?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMobileNavOpen(false);
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const controls = [menuButtonRef.current, ...Array.from(drawerRef.current?.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ) ?? [])].filter((element): element is HTMLElement => Boolean(element && element.getClientRects().length));
+      if (!controls.length) return;
+      const first = controls[0]!;
+      const last = controls.at(-1)!;
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", onKeyDown);
+      menuButtonRef.current?.focus();
+    };
+  }, [mobileNavOpen]);
   return (
     <div className="app-shell">
+      {mobileNavOpen && <button type="button" className="sidebar-backdrop" aria-label="Dismiss navigation" onClick={() => setMobileNavOpen(false)} />}
       <aside className="sidebar">
         <div className="sidebar-header">
           <a className="brand" href="/">
             <img src="/branding/odan-logo-transparent.png" alt="Odan Construction" />
           </a>
-          <button type="button" className="sidebar-menu-toggle" aria-label={mobileNavOpen ? "Close navigation" : "Open navigation"}
+          <button ref={menuButtonRef} type="button" className="sidebar-menu-toggle" aria-label={mobileNavOpen ? "Close navigation" : "Open navigation"}
             aria-expanded={mobileNavOpen} aria-controls="sidebar-content" onClick={() => setMobileNavOpen((open) => !open)}>
             <WorkspaceIcon name={mobileNavOpen ? "close" : "menu"} size={22} />
           </button>
         </div>
-        <div id="sidebar-content" className={`sidebar-content${mobileNavOpen ? " is-open" : ""}`}>
+        <div ref={drawerRef} id="sidebar-content" className={`sidebar-content${mobileNavOpen ? " is-open" : ""}`}>
         <div className="nav-label">WORKSPACE</div>
         <nav aria-label="Main navigation">
           <NavLink to="/" end>

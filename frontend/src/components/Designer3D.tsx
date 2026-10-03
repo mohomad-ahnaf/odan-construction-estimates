@@ -137,6 +137,10 @@ export function Designer3D({ walls, junctions, selectedId, onSelect, fitSignal, 
     type Drag = { kind: "DRAW"; start: PlanPoint; intent: SnapIntent | null } |
       { kind: "MOVE"; wallId: string; pointer: PlanPoint; start: PlanPoint; end: PlanPoint };
     let drag: Drag | null = null;
+    const activeTouches = new Set<number>();
+    let touchGesture = false;
+    let touchStart: { x: number; y: number } | null = null;
+    let touchWallStart: { start: PlanPoint; intent: SnapIntent | null } | null = null;
     let preview: THREE.Line | null = null;
     let snapMarker: THREE.Mesh | null = null;
     const clearPreview = () => {
@@ -187,6 +191,14 @@ export function Designer3D({ walls, junctions, selectedId, onSelect, fitSignal, 
       return { start: nextStart, end: nextEnd, intents, hit };
     };
     const onPointerDown = (event: PointerEvent) => {
+      if (event.pointerType === "touch") {
+        activeTouches.add(event.pointerId);
+        if (activeTouches.size > 1) {
+          touchGesture = true; drag = null; touchWallStart = null; clearPreview();
+        }
+        touchStart = { x: event.clientX, y: event.clientY };
+        return;
+      }
       if (tool !== "WALL" && tool !== "SELECT") return;
       const point = pointAt(event); if (!point) return;
       if (tool === "WALL") {
@@ -204,6 +216,7 @@ export function Designer3D({ walls, junctions, selectedId, onSelect, fitSignal, 
       renderer.domElement.setPointerCapture(event.pointerId);
     };
     const onPointerMove = (event: PointerEvent) => {
+      if (event.pointerType === "touch") return;
       const active = drag; if (!active) return;
       if (active.kind === "DRAW") {
         const point = pointAt(event); if (!point) return;
@@ -217,6 +230,35 @@ export function Designer3D({ walls, junctions, selectedId, onSelect, fitSignal, 
       }
     };
     const onPointerUp = (event: PointerEvent) => {
+      if (event.pointerType === "touch") {
+        activeTouches.delete(event.pointerId);
+        if (touchGesture) {
+          if (!activeTouches.size) touchGesture = false;
+          touchStart = null; clearPreview(); return;
+        }
+        const moved = touchStart && Math.hypot(event.clientX - touchStart.x, event.clientY - touchStart.y) > 8;
+        touchStart = null;
+        if (moved) return;
+        if (tool === "WALL") {
+          const point = pointAt(event); if (!point) return;
+          const hit = snapped(point, event, undefined, undefined, touchWallStart?.start);
+          if (!touchWallStart) {
+            touchWallStart = { start: hit.point, intent: hit.intent };
+            showPreview(hit.point, hit.point, null);
+          } else {
+            const start = touchWallStart;
+            touchWallStart = null; clearPreview();
+            if (modelDistance(start.start, hit.point) > .05)
+              onDrawRef.current?.(start.start, hit.point, { START: start.intent, END: hit.intent });
+          }
+          return;
+        }
+        if (tool === "SELECT" || tool === "DOOR" || tool === "WINDOW") {
+          rayAt(event); const hit = raycaster.intersectObjects(meshes)[0];
+          if (hit?.object.userData.elementId) onSelectRef.current(hit.object.userData.elementId as string);
+        }
+        return;
+      }
       const active = drag; drag = null; clearPreview();
       if (!active) {
         if (tool !== "SELECT" && tool !== "DOOR" && tool !== "WINDOW") return;
@@ -238,10 +280,12 @@ export function Designer3D({ walls, junctions, selectedId, onSelect, fitSignal, 
         else onSelectRef.current(active.wallId);
       }
     };
-    const onEscape = (event: KeyboardEvent) => { if (event.key === "Escape") { drag = null; clearPreview(); } };
+    const onEscape = (event: KeyboardEvent) => { if (event.key === "Escape") { drag = null; touchWallStart = null; clearPreview(); } };
+    const onPointerCancel = (event: PointerEvent) => { activeTouches.delete(event.pointerId); drag = null; touchWallStart = null; clearPreview(); if (!activeTouches.size) touchGesture = false; };
     renderer.domElement.addEventListener("pointerdown", onPointerDown);
     renderer.domElement.addEventListener("pointermove", onPointerMove);
     renderer.domElement.addEventListener("pointerup", onPointerUp);
+    renderer.domElement.addEventListener("pointercancel", onPointerCancel);
     window.addEventListener("keydown", onEscape);
     let frame = 0;
     let disposed = false;
@@ -260,6 +304,7 @@ export function Designer3D({ walls, junctions, selectedId, onSelect, fitSignal, 
       renderer.domElement.removeEventListener("pointerdown", onPointerDown);
       renderer.domElement.removeEventListener("pointermove", onPointerMove);
       renderer.domElement.removeEventListener("pointerup", onPointerUp);
+      renderer.domElement.removeEventListener("pointercancel", onPointerCancel);
       window.removeEventListener("keydown", onEscape);
       clearPreview();
       controls.dispose();

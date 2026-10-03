@@ -120,6 +120,22 @@ beforeEach(() => {
 });
 
 describe("PlanMeasurementWorkspace drafts", () => {
+  it("keeps touch panning from creating a measurement point", async () => {
+    setupApi(async () => {});
+    const { overlay } = await renderWorkspace();
+    fireEvent.click(screen.getByRole("button", { name: "Length" }));
+    const pointer = (type: string, x: number, y: number) => {
+      const event = new Event(type, { bubbles: true });
+      Object.defineProperties(event, { pointerId: { value: 1 }, pointerType: { value: "touch" },
+        clientX: { value: x }, clientY: { value: y } });
+      fireEvent(overlay, event);
+    };
+    pointer("pointerdown", 5, 5);
+    pointer("pointermove", 40, 40);
+    pointer("pointerup", 40, 40);
+    fireEvent.click(overlay, { clientX: 40, clientY: 40 });
+    expect(screen.queryByLabelText("Unsaved measurement result")).not.toBeInTheDocument();
+  });
   it("preserves a failed length draft and saves it only after a successful retry", async () => {
     let fail = true;
     const creates: Record<string, unknown>[] = [];

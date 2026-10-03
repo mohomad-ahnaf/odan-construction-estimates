@@ -22,6 +22,13 @@ export function DesignerTopCanvas({ walls, selectedId, highlightedWallIds = [], 
   const moving = useRef<{ wallId: string; pointer: PlanPoint; start: PlanPoint; end: PlanPoint } | null>(null);
   const [dropTarget, setDropTarget] = useState<{ wallId: string; position: number; type: "DOOR" | "WINDOW" } | null>(null);
   const pan = useRef<{ x: number; y: number; viewX: number; viewY: number } | null>(null);
+  const touchPoints = useRef(new Map<number, { x: number; y: number }>());
+  const touchGesture = useRef(false);
+  const pinchDistance = useRef<number | null>(null);
+  const touchWallStart = useRef<{ start: PlanPoint; intent: SnapIntent | null } | null>(null);
+  const touchTapStart = useRef<{ x: number; y: number } | null>(null);
+  const suppressClickUntil = useRef(0);
+  useEffect(() => { touchWallStart.current = null; setPreview(null); }, [tool]);
   useEffect(() => {
     if (!walls.length) { setView({ x: -10, y: -7, width: 20, height: 14 }); return; }
     const xs = walls.flatMap((wall) => [wall.startX, wall.endX]);
@@ -90,6 +97,21 @@ export function DesignerTopCanvas({ walls, selectedId, highlightedWallIds = [], 
     return () => window.removeEventListener("keydown", key);
   }, []);
   function pointerDown(event: PointerEvent<SVGSVGElement>) {
+    if (event.pointerType === "touch") {
+      if (!touchPoints.current.size) suppressClickUntil.current = 0;
+      touchPoints.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      touchTapStart.current = { x: event.clientX, y: event.clientY };
+      if (touchPoints.current.size > 1) {
+        touchGesture.current = true;
+        suppressClickUntil.current = Date.now() + 500;
+        drawing.current = null; moving.current = null; pan.current = null;
+        touchWallStart.current = null; setPreview(null);
+        const [a, b] = [...touchPoints.current.values()];
+        pinchDistance.current = Math.hypot(a!.x - b!.x, a!.y - b!.y);
+        return;
+      }
+      if (tool === "WALL") return;
+    }
     if (tool === "PAN") {
       pan.current = { x: event.clientX, y: event.clientY, viewX: view.x, viewY: view.y };
       event.currentTarget.setPointerCapture(event.pointerId);
@@ -109,6 +131,23 @@ export function DesignerTopCanvas({ walls, selectedId, highlightedWallIds = [], 
     }
   }
   function pointerMove(event: PointerEvent<SVGSVGElement>) {
+    if (event.pointerType === "touch" && touchPoints.current.has(event.pointerId)) {
+      touchPoints.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (touchTapStart.current && Math.hypot(event.clientX - touchTapStart.current.x, event.clientY - touchTapStart.current.y) > 8)
+        suppressClickUntil.current = Date.now() + 500;
+      if (touchPoints.current.size > 1) {
+        const [a, b] = [...touchPoints.current.values()];
+        const distance = Math.hypot(a!.x - b!.x, a!.y - b!.y);
+        if (pinchDistance.current && distance > 0) {
+          const factor = Math.min(1.3, Math.max(.77, pinchDistance.current / distance));
+          setView((old) => ({ ...old, x: old.x + old.width * (1 - factor) / 2,
+            y: old.y + old.height * (1 - factor) / 2, width: old.width * factor, height: old.height * factor }));
+        }
+        pinchDistance.current = distance;
+        return;
+      }
+      if (touchGesture.current || tool === "WALL") return;
+    }
     if (pan.current) {
       const rect = svg.current!.getBoundingClientRect();
       setView((old) => ({ ...old, x: pan.current!.viewX - (event.clientX - pan.current!.x) / rect.width * old.width,
@@ -120,6 +159,31 @@ export function DesignerTopCanvas({ walls, selectedId, highlightedWallIds = [], 
     } else if (moving.current) setPreview(moveAt(point(event)));
   }
   function pointerUp(event: PointerEvent<SVGSVGElement>) {
+    if (event.pointerType === "touch") {
+      touchPoints.current.delete(event.pointerId);
+      const moved = touchTapStart.current && Math.hypot(event.clientX - touchTapStart.current.x, event.clientY - touchTapStart.current.y) > 8;
+      touchTapStart.current = null;
+      if (touchGesture.current) {
+        if (!touchPoints.current.size) { touchGesture.current = false; pinchDistance.current = null; }
+        cancelPointer();
+        return;
+      }
+      if (tool === "WALL") {
+        if (moved) return;
+        const hit = snapped(point(event), touchWallStart.current?.start ?? null);
+        if (!touchWallStart.current) {
+          touchWallStart.current = { start: hit.point, intent: hit.intent };
+          setPreview({ start: hit.point, end: hit.point, intents: { START: hit.intent, END: null } });
+        } else {
+          const start = touchWallStart.current;
+          touchWallStart.current = null;
+          setPreview(null);
+          if (modelDistance(start.start, hit.point) > .05)
+            onDraw(start.start, hit.point, { START: start.intent, END: hit.intent });
+        }
+        return;
+      }
+    }
     if (pan.current) { pan.current = null; return; }
     if (drawing.current) {
       const start = drawing.current.start;
@@ -172,7 +236,7 @@ export function DesignerTopCanvas({ walls, selectedId, highlightedWallIds = [], 
   return <svg ref={svg} className="designer-top" role="img" aria-label="Top view building canvas"
     viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`} preserveAspectRatio="xMidYMid meet"
     onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp}
-    onPointerCancel={cancelPointer}
+    onPointerCancel={(event) => { touchPoints.current.delete(event.pointerId); if (!touchPoints.current.size) touchGesture.current = false; cancelPointer(); }}
     onDragOver={dragOver} onDragLeave={() => setDropTarget(null)} onDrop={drop}>
     <defs><pattern id="designer-grid" width={GRID} height={GRID} patternUnits="userSpaceOnUse">
       <path d={`M ${GRID} 0 L 0 0 0 ${GRID}`} fill="none" stroke="#e6e1d7" strokeWidth=".008" /></pattern></defs>
@@ -187,13 +251,14 @@ export function DesignerTopCanvas({ walls, selectedId, highlightedWallIds = [], 
       <line data-wall-id={wall.id} x1={wall.startX} y1={wall.startY} x2={wall.endX} y2={wall.endY}
         stroke="transparent" strokeWidth=".48" onClick={(event) => {
           event.stopPropagation();
+          if (Date.now() < suppressClickUntil.current) return;
           if (tool !== "WALL" && tool !== "PAN") onPickWall(wall.id, point(event), tool === "DOOR" || tool === "WINDOW" ? tool : undefined);
         }} />
       {wall.openings.map((opening) => {
         const a = wallPointAt(wall, opening.positionMeters), b = wallPointAt(wall, opening.positionMeters + opening.widthMeters);
         return <line key={opening.id} x1={a.x} y1={a.y} x2={b.x} y2={b.y}
           stroke={opening.type === "DOOR" ? "#f3c872" : "#78b7d0"} strokeWidth={wall.thicknessMeters + .025}
-          onClick={(event) => { event.stopPropagation(); onPickOpening(opening.id); }} />;
+          onClick={(event) => { event.stopPropagation(); if (Date.now() >= suppressClickUntil.current) onPickOpening(opening.id); }} />;
       })}
       <text x={(wall.startX + wall.endX) / 2} y={(wall.startY + wall.endY) / 2 - .25}
         fontSize=".23" fill="#092541" textAnchor="middle" pointerEvents="none">{wall.label}</text>
